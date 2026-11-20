@@ -33,7 +33,6 @@
             android:screenOrientation="landscape"
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
-            android:resumeWhilePaused="true"
             android:excludeFromRecents="true"
             android:windowSoftInputMode="adjustPan"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
