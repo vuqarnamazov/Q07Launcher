@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="car_bg">#FF0B0E13</color>
+
+    <style name="Theme.CarLauncher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/car_bg</item>
+        <item name="android:statusBarColor">@color/car_bg</item>
+        <item name="android:navigationBarColor">@color/car_bg</item>
+        <item name="android:windowShowWallpaper">false</item>
+    </style>
+</resources>
