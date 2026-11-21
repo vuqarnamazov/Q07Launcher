@@ -36,7 +36,7 @@ import az.q07.launcher.ui.theme.CarColors
 private const val DESIGN_LONG_SIDE_DP = 1280f
 
 @Composable
-fun LauncherScreen(appsVersion: Int) {
+fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
     val context = LocalContext.current
     val apps by produceState<List<AppEntry>?>(null, appsVersion) {
         value = AppRepository.loadApps(context)
@@ -60,7 +60,7 @@ fun LauncherScreen(appsVersion: Int) {
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    DockPanel(apps.orEmpty(), vertical = true, Modifier.weight(0.22f).fillMaxHeight())
+                    DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
                     ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
                     AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
                 }
@@ -70,7 +70,7 @@ fun LauncherScreen(appsVersion: Int) {
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    DockPanel(apps.orEmpty(), vertical = false, Modifier.fillMaxWidth().weight(0.18f))
+                    DockPanel(apps.orEmpty(), vertical = false, resumeTick = resumeTick, modifier = Modifier.fillMaxWidth().weight(0.18f))
                     ModulesPanel(Modifier.fillMaxWidth().weight(0.37f))
                     AppsPanel(apps, columns = AppSettings.gridColumns + 1, Modifier.fillMaxWidth().weight(0.45f))
                 }

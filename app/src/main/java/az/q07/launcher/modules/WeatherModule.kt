@@ -22,7 +22,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.WeatherData
+import az.q07.launcher.data.WeatherRepo
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
 import az.q07.launcher.ui.theme.CarColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,88 +37,24 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private data class DayForecast(val date: String, val code: Int, val max: Double, val min: Double)
-private data class WeatherData(
-    val ok: Boolean = false,
-    val error: String? = null,
-    val temp: Double = 0.0,
-    val code: Int = 0,
-    val wind: Double = 0.0,
-    val humidity: Int = 0,
-    val days: List<DayForecast> = emptyList(),
-    val city: String = ""
-)
-
 /** Hava — Open-Meteo (açar tələb etmir). Şəhər: Ayarlar → Hava. */
 object WeatherModule : LauncherModule {
     override val id = "weather"
     override val title = "Hava"
+    override val shortTitle = "Hava"
     override val icon: ImageVector = Icons.Filled.WbSunny
     override val accent: Color = Color(0xFFFFC94D)
 
-    private fun describe(code: Int): Pair<String, String> = when (code) {
-        0 -> "☀️" to "Açıq"
-        1, 2 -> "🌤️" to "Az buludlu"
-        3 -> "☁️" to "Buludlu"
-        45, 48 -> "🌫️" to "Duman"
-        in 51..57 -> "🌦️" to "Çiskin"
-        in 61..67 -> "🌧️" to "Yağış"
-        in 71..77 -> "❄️" to "Qar"
-        in 80..82 -> "🌧️" to "Leysan"
-        85, 86 -> "🌨️" to "Qar yağışı"
-        in 95..99 -> "⛈️" to "İldırım"
-        else -> "🌡️" to "—"
-    }
-
-    private fun fetch(): WeatherData {
-        val c = AppSettings.city
-        return try {
-            val url = URL(
-                "https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}" +
-                    "&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m" +
-                    "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4"
-            )
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 8000; readTimeout = 8000
-            }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            val o = JSONObject(body)
-            val cur = o.getJSONObject("current")
-            val d = o.getJSONObject("daily")
-            val times = d.getJSONArray("time")
-            val days = (0 until times.length()).map { i ->
-                DayForecast(
-                    times.getString(i),
-                    d.getJSONArray("weather_code").getInt(i),
-                    d.getJSONArray("temperature_2m_max").getDouble(i),
-                    d.getJSONArray("temperature_2m_min").getDouble(i)
-                )
-            }
-            WeatherData(
-                ok = true,
-                temp = cur.getDouble("temperature_2m"),
-                code = cur.getInt("weather_code"),
-                wind = cur.getDouble("wind_speed_10m"),
-                humidity = cur.getInt("relative_humidity_2m"),
-                days = days,
-                city = c.name
-            )
-        } catch (e: Exception) {
-            WeatherData(error = "İnternet yoxdur və ya xidmət cavab vermir", city = c.name)
-        }
-    }
+    private fun describe(code: Int) = WeatherRepo.describe(code)
 
     @Composable
     private fun rememberWeather(): WeatherData {
-        val cityIndex = AppSettings.cityIndex
-        val w by produceState(WeatherData(city = AppSettings.city.name), cityIndex) {
-            while (true) {
-                val r = withContext(Dispatchers.IO) { fetch() }
-                value = r
-                delay(if (r.ok) 15 * 60_000L else 60_000L)
-            }
+        val context = LocalContext.current
+        DisposableEffect(Unit) {
+            WeatherRepo.acquire(context)
+            onDispose { WeatherRepo.release() }
         }
+        val w by WeatherRepo.state.collectAsState()
         return w
     }
 

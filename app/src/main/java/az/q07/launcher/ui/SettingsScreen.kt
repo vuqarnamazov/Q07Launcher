@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -61,7 +62,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import az.q07.launcher.BuildConfig
 import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.ForegroundApp
 import az.q07.launcher.data.HomeMode
+import az.q07.launcher.data.WeatherRepo
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.ObdMonitor
 import az.q07.launcher.data.QuickActions
@@ -76,6 +79,7 @@ import java.net.URL
 
 private enum class Section(val title: String, val icon: ImageVector) {
     Look("Görünüş", Icons.Filled.Palette),
+    Dock("Dock / Neon menyu", Icons.Filled.Tune),
     Home("Əsas ekran", Icons.Filled.Home),
     Modules("Modullar", Icons.Filled.ViewModule),
     Car("Maşın / OBD", Icons.Filled.DirectionsCar),
@@ -134,6 +138,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                 Text(section.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
                 when (section) {
                     Section.Look -> LookSection()
+                    Section.Dock -> DockSection()
                     Section.Home -> HomeSection()
                     Section.Modules -> ModulesSection()
                     Section.Car -> CarSection()
@@ -214,6 +219,71 @@ private fun LookSection() {
     Chips(cols.map { "$it" }, cols.indexOf(AppSettings.gridColumns)) { i ->
         AppSettings.update { gridColumns = cols[i] }
     }
+}
+
+@Composable
+private fun DockSection() {
+    val context = LocalContext.current
+    Label("Slot sayı")
+    val counts = listOf(3, 4, 5, 6)
+    Chips(counts.map { "$it" }, counts.indexOf(AppSettings.dockSlotCount)) { i ->
+        AppSettings.update { dockSlotCount = counts[i] }
+    }
+
+    Label("Slotların sırası", "▲▼ ilə yerini dəyiş. Uzun basaraq dock-da başqa tətbiq seçmək olar.")
+    val pm = context.packageManager
+    repeat(AppSettings.dockSlotCount) { i ->
+        val comp = LauncherPrefs.dockSlots.getOrElse(i) { "" }
+        val appName = remember(comp) {
+            android.content.ComponentName.unflattenFromString(comp)?.let { c ->
+                runCatching { pm.getApplicationLabel(pm.getApplicationInfo(c.packageName, 0)).toString() }.getOrNull()
+            } ?: "— boş —"
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(CarColors.Panel)
+                .padding(horizontal = 14.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("${i + 1}.", fontSize = 17.sp, color = CarColors.TextSecondary)
+            Spacer(Modifier.width(10.dp))
+            Text(appName, fontSize = 17.sp, color = CarColors.TextPrimary, modifier = Modifier.weight(1f))
+            IconButton(onClick = { LauncherPrefs.moveSlot(i, -1) }, enabled = i > 0) {
+                Icon(Icons.Filled.KeyboardArrowUp, "Yuxarı")
+            }
+            IconButton(onClick = { LauncherPrefs.moveSlot(i, 1) }, enabled = i < AppSettings.dockSlotCount - 1) {
+                Icon(Icons.Filled.KeyboardArrowDown, "Aşağı")
+            }
+        }
+    }
+
+    Label("Neon işığın rəngi")
+    val modes = listOf("neon" to "Neon mavi", "accent" to "Vurğu rəngi", "slot" to "Hər slot öz rəngi")
+    Chips(modes.map { it.second }, modes.indexOfFirst { it.first == AppSettings.glowMode }) { i ->
+        AppSettings.update { glowMode = modes[i].first }
+    }
+    SwitchRow("Gecə işığı zəiflət", "20:00–07:00 və ya sistem gecə rejimində neon işıq yumşalır", AppSettings.nightDim) { v ->
+        AppSettings.update { nightDim = v }
+    }
+    SwitchRow("Toxunuş səsi və vibrasiya", null, AppSettings.haptics) { v -> AppSettings.update { haptics = v } }
+    SwitchRow(
+        "Orta panel: neon tablar",
+        "Söndürsən, bütün kartlar alt-alta göstərilir (daha çox resurs işlədir)",
+        AppSettings.middleTabs
+    ) { v -> AppSettings.update { middleTabs = v } }
+
+    val usage = ForegroundApp.hasAccess(context)
+    Label(
+        "Son açılan tətbiqin slotunu işıqlandır",
+        if (usage) "✓ İcazə var" else "✗ İcazə yoxdur — kompüterdən bir dəfə:"
+    )
+    if (!usage) Text("adb shell appops set az.q07.launcher GET_USAGE_STATS allow", fontSize = 14.sp, color = CarColors.Warning)
+    Text(
+        "İki dəfə toxunma: Waze slotu → Evə marşrut, musiqi slotu → oynat/pauza. Barmağı menyu boyunca sürüşdürüb buraxmaqla da seçmək olar.",
+        fontSize = 14.sp, color = CarColors.TextSecondary
+    )
 }
 
 @Composable
@@ -373,10 +443,12 @@ private fun CarSection() {
 
 @Composable
 private fun WeatherSection() {
+    val context = LocalContext.current
     Label("Şəhər", "Hava kartı bu şəhərin proqnozunu göstərir (Open-Meteo, internet lazımdır)")
     AppSettings.cities.chunked(5).forEach { row ->
         Chips(row.map { it.name }, row.indexOf(AppSettings.city)) { i ->
             AppSettings.update { cityIndex = AppSettings.cities.indexOf(row[i]) }
+            WeatherRepo.cityChanged(context)
         }
     }
 }
@@ -392,7 +464,8 @@ private fun PermsSection() {
         "adb shell appwidget grantbind --package az.q07.launcher --user 0",
         "adb shell pm grant az.q07.launcher android.permission.RECORD_AUDIO",
         "adb shell pm grant az.q07.launcher android.permission.ACCESS_FINE_LOCATION",
-        "adb shell pm grant az.q07.launcher android.car.permission.CAR_SPEED"
+        "adb shell pm grant az.q07.launcher android.car.permission.CAR_SPEED",
+        "adb shell appops set az.q07.launcher GET_USAGE_STATS allow"
     ).forEach { Text(it, fontSize = 14.sp, color = CarColors.Warning) }
     OutlinedButton(onClick = {
         QuickActions.start(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))

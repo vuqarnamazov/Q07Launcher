@@ -32,7 +32,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import az.q07.launcher.data.MediaRepo
+import az.q07.launcher.data.NowPlaying
 import az.q07.launcher.data.QuickActions
 import az.q07.launcher.media.MediaListenerService
 import az.q07.launcher.ui.theme.CarColors
@@ -53,70 +56,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-private data class NowPlaying(
-    val permission: Boolean = true,
-    val active: Boolean = false,
-    val title: String = "",
-    val artist: String = "",
-    val appLabel: String = "",
-    val playing: Boolean = false,
-    val art: Bitmap? = null,
-    val controller: MediaController? = null
-)
-
 /** Hazırda çalan musiqi/video (istənilən tətbiqdən) + idarə düymələri */
 object MediaModule : LauncherModule {
     override val id = "media"
     override val title = "İndi çalır"
+    override val shortTitle = "Media"
     override val icon: ImageVector = Icons.Filled.MusicNote
     override val accent: Color = CarColors.Purple
 
     private const val ADB_CMD =
         "adb shell cmd notification allow_listener az.q07.launcher/az.q07.launcher.media.MediaListenerService"
 
-    private fun hasPermission(context: Context) =
-        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
-
-    private fun read(context: Context): NowPlaying {
-        if (!hasPermission(context)) return NowPlaying(permission = false)
-        return try {
-            val msm = context.getSystemService(MediaSessionManager::class.java)
-            val sessions = msm.getActiveSessions(ComponentName(context, MediaListenerService::class.java))
-            // Çalanı üstün tut, yoxdursa ilk sessiya
-            val c = sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-                ?: sessions.firstOrNull()
-                ?: return NowPlaying()
-            val md = c.metadata
-            val pm = context.packageManager
-            val label = runCatching {
-                pm.getApplicationLabel(pm.getApplicationInfo(c.packageName, 0)).toString()
-            }.getOrDefault(c.packageName)
-            NowPlaying(
-                active = true,
-                title = md?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
-                artist = md?.getString(MediaMetadata.METADATA_KEY_ARTIST)
-                    ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty(),
-                appLabel = label,
-                playing = c.playbackState?.state == PlaybackState.STATE_PLAYING,
-                art = md?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ?: md?.getBitmap(MediaMetadata.METADATA_KEY_ART),
-                controller = c
-            )
-        } catch (e: SecurityException) {
-            NowPlaying(permission = false)
-        }
-    }
-
     @Composable
     private fun rememberNowPlaying(): NowPlaying {
         val context = LocalContext.current
-        val state by produceState(NowPlaying()) {
-            while (true) {
-                value = withContext(Dispatchers.Default) { read(context.applicationContext) }
-                delay(1000)
-            }
+        DisposableEffect(Unit) {
+            MediaRepo.acquire(context)
+            onDispose { MediaRepo.release() }
         }
-        return state
+        val np by MediaRepo.state.collectAsState()
+        return np
     }
 
     @Composable

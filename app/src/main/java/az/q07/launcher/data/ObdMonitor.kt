@@ -172,6 +172,7 @@ object ObdMonitor {
                 val unsupported = mutableSetOf<String>()
                 var cycle = 0
                 while (true) {
+                    if (!AppVisibility.visible) { delay(2000); continue } // launcher gizlidirsə sorğu yox
                     if (cycle % 30 == 0) unsupported.clear() // vaxtaşırı yenidən yoxla (mühərrik işə düşə bilər)
                     val values = _state.value.values.toMutableMap()
                     for (pid in ObdPids.all) {

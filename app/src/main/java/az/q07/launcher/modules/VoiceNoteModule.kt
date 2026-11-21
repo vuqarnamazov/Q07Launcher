@@ -66,6 +66,7 @@ import java.util.Locale
 object VoiceNoteModule : LauncherModule {
     override val id = "voice_notes"
     override val title = "Səsli qeyd / xatırlatma"
+    override val shortTitle = "Qeyd"
     override val icon: ImageVector = Icons.Filled.Mic
     override val accent: Color = CarColors.Accent
 

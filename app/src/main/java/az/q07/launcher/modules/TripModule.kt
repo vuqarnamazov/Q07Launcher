@@ -44,6 +44,7 @@ import az.q07.launcher.ui.theme.CarColors
 object TripModule : LauncherModule {
     override val id = "trip"
     override val title = "Səfər (GPS)"
+    override val shortTitle = "Səfər"
     override val icon: ImageVector = Icons.Filled.Explore
     override val accent: Color = CarColors.Green
 

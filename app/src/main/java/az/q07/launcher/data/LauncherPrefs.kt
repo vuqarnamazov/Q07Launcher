@@ -12,7 +12,10 @@ import org.json.JSONObject
  * Hamısı Compose state-dir — dəyişəndə ekran avtomatik yenilənir.
  */
 object LauncherPrefs {
-    const val DOCK_SLOTS = 4
+    /** Maksimal slot sayı; ekranda göstərilən say Ayarlardadır (3–6) */
+    const val DOCK_SLOTS = 6
+
+    val slotNames = listOf("Naviqasiya", "Musiqi", "Video", "Brauzer / AI", "Radio", "Telefon / AA")
 
     private lateinit var prefs: SharedPreferences
 
@@ -45,7 +48,11 @@ object LauncherPrefs {
         listOf(
             "com.brave.browser", "com.google.android.apps.bard", "com.deepseek.chat", "org.mozilla.firefox",
             "com.android.chrome", "com.yandex.browser", "com.android.browser", "mark.via.gp"
-        )
+        ),
+        // 5) Radio
+        listOf("com.safakge.radyokulesi", "com.incall.apps.radio", "com.incall.apps.sdamedia.radio"),
+        // 6) Telefon / Android Auto / CarPlay
+        listOf("com.andrerinas.headunitrevived", "com.incall.apps.bluetooth", "com.incall.apps.btphone")
     )
 
     fun init(context: Context) {
@@ -62,12 +69,12 @@ object LauncherPrefs {
             repeat(DOCK_SLOTS) { i -> dockSlots.add(parts.getOrElse(i) { "" }) }
         }
         // Yeni standartlar (v2: Q07-də quraşdırılmış tətbiqlər) — yalnız boş slotlara, bir dəfə
-        if (prefs.getInt("defaults_v", 1) < 2) {
+        if (prefs.getInt("defaults_v", 1) < 3) {
             defaultCandidates.forEachIndexed { i, list ->
                 if (dockSlots[i].isEmpty()) dockSlots[i] = resolveFirstInstalled(context, list)
             }
             saveDock()
-            prefs.edit().putInt("defaults_v", 2).apply()
+            prefs.edit().putInt("defaults_v", 3).apply()
         }
 
         hidden.clear()
@@ -92,6 +99,16 @@ object LauncherPrefs {
     fun setDockSlot(index: Int, component: ComponentName?) {
         if (index !in 0 until DOCK_SLOTS) return
         dockSlots[index] = component?.flattenToString() ?: ""
+        saveDock()
+    }
+
+    /** Slotun yerini dəyiş (Ayarlar → Dock) */
+    fun moveSlot(index: Int, delta: Int) {
+        val j = index + delta
+        if (index !in 0 until DOCK_SLOTS || j !in 0 until DOCK_SLOTS) return
+        val a = dockSlots[index]
+        dockSlots[index] = dockSlots[j]
+        dockSlots[j] = a
         saveDock()
     }
 

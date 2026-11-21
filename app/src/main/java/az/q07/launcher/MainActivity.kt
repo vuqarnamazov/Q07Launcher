@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.AppVisibility
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.NotesStore
 import az.q07.launcher.data.ReminderScheduler
@@ -24,6 +25,9 @@ class MainActivity : ComponentActivity() {
 
     // Tətbiq quraşdırılanda/silinəndə artır → tətbiq siyahısı yenilənir
     private var appsVersion by mutableIntStateOf(0)
+
+    // Hər dəfə launcher-ə qayıdanda artır → son açılan tətbiqin slotu işıqlanır
+    private var resumeTick by mutableIntStateOf(0)
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -60,17 +64,24 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CarLauncherTheme {
-                LauncherScreen(appsVersion = appsVersion)
+                LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
             }
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        resumeTick++
+    }
+
     override fun onStart() {
         super.onStart()
+        AppVisibility.visible = true
         runCatching { WidgetStore.host.startListening() }
     }
 
     override fun onStop() {
+        AppVisibility.visible = false
         runCatching { WidgetStore.host.stopListening() }
         super.onStop()
     }

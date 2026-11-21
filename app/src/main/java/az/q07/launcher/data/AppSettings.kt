@@ -42,6 +42,14 @@ object AppSettings {
     var uiScalePercent by mutableIntStateOf(100)   // avtomatik miqyasa nisbətən
     var gridColumns by mutableIntStateOf(4)
 
+    // Neon menyu / dock
+    var haptics by mutableStateOf(true)             // toxunuş səsi + vibrasiya
+    var dockSlotCount by mutableIntStateOf(4)       // 3..6
+    var glowMode by mutableStateOf("neon")          // neon | accent | slot
+    var nightDim by mutableStateOf(true)            // gecə işığı zəiflət
+    var middleTabs by mutableStateOf(true)          // orta panel: tablar (true) və ya siyahı
+    var selectedTab by mutableStateOf("car")
+
     // Modullar
     val moduleOrder = mutableStateListOf<String>()
     val disabledModules = mutableStateListOf<String>()
@@ -79,6 +87,12 @@ object AppSettings {
             obdBtName = getString("obdBtName", "")!!
             obdIntervalMs = getInt("obdInterval", 1500)
             cityIndex = getInt("city", 0)
+            haptics = getBoolean("haptics", true)
+            dockSlotCount = getInt("dockSlots", 4).coerceIn(3, 6)
+            glowMode = getString("glowMode", "neon")!!
+            nightDim = getBoolean("nightDim", true)
+            middleTabs = getBoolean("middleTabs", true)
+            selectedTab = getString("tab", "car")!!
         }
     }
 
@@ -103,6 +117,12 @@ object AppSettings {
             .putString("obdBtName", obdBtName)
             .putInt("obdInterval", obdIntervalMs)
             .putInt("city", cityIndex)
+            .putBoolean("haptics", haptics)
+            .putInt("dockSlots", dockSlotCount)
+            .putString("glowMode", glowMode)
+            .putBoolean("nightDim", nightDim)
+            .putBoolean("middleTabs", middleTabs)
+            .putString("tab", selectedTab)
             .apply()
     }
 }

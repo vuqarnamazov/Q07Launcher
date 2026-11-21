@@ -42,6 +42,7 @@ import az.q07.launcher.ui.theme.CarColors
 object NetworkModule : LauncherModule {
     override val id = "network"
     override val title = "Şəbəkə / bağlantı"
+    override val shortTitle = "Şəbəkə"
     override val icon: ImageVector = Icons.Filled.NetworkCheck
     override val accent: Color = CarColors.Green
 

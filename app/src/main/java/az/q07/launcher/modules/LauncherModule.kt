@@ -17,6 +17,9 @@ interface LauncherModule {
     val icon: ImageVector
     val accent: Color
 
+    /** Tab-bar üçün qısa ad */
+    val shortTitle: String get() = title.substringBefore(" ")
+
     /** Kart bağlı olanda görünən qısa məzmun */
     @Composable
     fun Summary()

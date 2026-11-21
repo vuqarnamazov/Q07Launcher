@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Hava, yeniləmə yoxlaması, OBD Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Son açılan tətbiqin slotunu işıqlandırmaq (ADB: appops set ... GET_USAGE_STATS allow) -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <!-- GPS səfər kartı -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

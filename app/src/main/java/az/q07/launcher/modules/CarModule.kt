@@ -47,6 +47,7 @@ private data class CarApiSnapshot(
 object CarModule : LauncherModule {
     override val id = "car"
     override val title = "Maşın göstəriciləri"
+    override val shortTitle = "Maşın"
     override val icon: ImageVector = Icons.Filled.Thermostat
     override val accent: Color = CarColors.Warning
 

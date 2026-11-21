@@ -25,6 +25,7 @@ import az.q07.launcher.ui.theme.CarColors
 object SystemInfoModule : LauncherModule {
     override val id = "system"
     override val title = "Sistem / ekran"
+    override val shortTitle = "Sistem"
     override val icon: ImageVector = Icons.Filled.Memory
     override val accent: Color = CarColors.Warning
 

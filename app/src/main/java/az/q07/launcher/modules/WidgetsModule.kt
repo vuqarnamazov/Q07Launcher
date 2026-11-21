@@ -55,6 +55,7 @@ import az.q07.launcher.ui.theme.CarColors
 object WidgetsModule : LauncherModule {
     override val id = "system_widgets"
     override val title = "Maşın vidcetləri"
+    override val shortTitle = "Vidcet"
     override val icon: ImageVector = Icons.Filled.DirectionsCar
     override val accent: Color = CarColors.Green
 

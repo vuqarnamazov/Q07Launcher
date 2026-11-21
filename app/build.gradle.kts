@@ -13,15 +13,33 @@ android {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
+    // Sabit imza GitHub Secrets-dən gəlir (Q07_KEYSTORE_B64, Q07_KS_PASS) — açar repoda saxlanmır.
+    // Secrets yoxdursa, build standart debug açarı ilə imzalanır.
+    val ksPath: String? = System.getenv("Q07_KEYSTORE")
+    signingConfigs {
+        if (ksPath != null) {
+            create("q07") {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("Q07_KS_PASS")
+                keyAlias = "q07"
+                keyPassword = System.getenv("Q07_KS_PASS")
+            }
+        }
+    }
+
     buildTypes {
+        // Release: R8 ilə optimallaşdırılmış, debug-dan xeyli sürətli işləyir
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName(if (ksPath != null) "q07" else "debug")
         }
     }
 
