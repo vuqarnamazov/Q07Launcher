@@ -86,7 +86,7 @@ object CarModule : LauncherModule {
     // Qeyd: Q07-də standart Android VHAL emulyator HAL-ıdır (diaqnostika 21.11.2026) —
     // ötürmə/sürət/kondisioner dəyərləri sintetikdir. Ona görə yalnız OBD (real) göstərilir.
     private val mainKeys = listOf("ambient", "coolant", "soc", "voltage")
-    private val secondKeys = listOf("speed", "rpm", "intake", "fuel")
+    private val secondKeys = listOf("speed", "rpm", "fuel", "intake")
 
     @Composable
     override fun Summary() {
@@ -113,17 +113,29 @@ object CarModule : LauncherModule {
     override fun Expanded() {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
-        val rest = ObdPids.all.filter { it.key !in mainKeys && it.key !in secondKeys }
+        val shown = (mainKeys + secondKeys).toSet()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            rest.chunked(4).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { pid -> Tile(pid, obd.values[pid.key], Modifier.weight(1f)) }
-                    repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
+            // Maşının bütün dəstəklənən göstəriciləri — qruplar üzrə
+            ObdPids.groups.forEach { g ->
+                val pids = ObdPids.all.filter { it.group == g && it.key !in shown && it.key !in obd.unsupported }
+                if (pids.isEmpty()) return@forEach
+                Text(g, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
+                pids.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { pid -> Tile(pid, obd.values[pid.key], Modifier.weight(1f)) }
+                        repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
+                    }
                 }
             }
+            val info = listOfNotNull(
+                obd.vin?.let { "VIN: $it" },
+                obd.adapterVolt?.let { "Adapter: $it" },
+                "Bloklar: ECM 7E8 · BECM 7EC · HPCM 7EA"
+            ).joinToString("  ·  ")
+            Text(info, fontSize = 13.sp, color = CarColors.TextSecondary)
             Text(
-                "Mühərrik işləmirsə (elektrik rejimi), motor parametrləri «—» göstərə bilər. " +
-                    "Maşının daxili sistemi real göstəriciləri kənar tətbiqlərə vermir — mənbə yalnız OBD adapteridir.",
+                "Mühərrik işləmirsə (elektrik rejimi), motor parametrləri «—» və ya 0 göstərə bilər. " +
+                    "Göstəricilər birbaşa OBD-dən, hər biri öz blokundan oxunur.",
                 fontSize = 13.sp, color = CarColors.TextSecondary
             )
         }

@@ -13,42 +13,86 @@ import kotlinx.coroutines.launch
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.UUID
 
 /**
- * OBD-II PID tərifi. Dəyər = (seçilmiş baytlar × scale) + add
- * Q07-OBD tətbiqindəki standart parametrlərlə eynidir.
+ * Changan Qiyuan Q07 üçün OBD-II PID kataloqu.
+ *
+ * Maşının skanından (22.11.2026): CAN 11-bit 500 kbit/s, 7 ECU cavab verir:
+ *   7E8 ECM (mühərrik) · 7EA HPCM (hibrid idarə) · 7EB DMCM (elektromotor)
+ *   7EC BECM (yüksək gərginlikli batareya) · 7ED · 7EE VTM · 7EF BCC
+ * Hər göstərici yalnız ÖZ blokundan oxunur (əvvəl cavablar qarışırdı).
+ *
+ * @param ecu cavab verən blokun başlığı (7E8…7EF); sorğu ünvanı = ecu - 8
+ * @param rate 1 = hər dövrə, N = hər N-ci dövrə, 0 = bir dəfə
  */
 data class ObdPid(
     val key: String,
     val name: String,
     val unit: String,
     val cmd: String,
+    val group: String,
+    val ecu: String = "7E8",
     val offset: Int = 0,
     val len: Int = 1,
     val scale: Double = 1.0,
     val add: Double = 0.0,
     val decimals: Int = 0,
     val warn: Double? = null,
-    val isTemp: Boolean = false
+    val isTemp: Boolean = false,
+    val rate: Int = 1
 )
 
 object ObdPids {
+    const val G_TEMP = "Temperaturlar"
+    const val G_HYBRID = "Batareya və elektrik"
+    const val G_DRIVE = "Hərəkət və mühərrik"
+    const val G_AIR = "Hava, yanacaq, qarışıq"
+    const val G_DIST = "Yürüş və vaxt"
+    val groups = listOf(G_TEMP, G_HYBRID, G_DRIVE, G_AIR, G_DIST)
+
     val all = listOf(
-        ObdPid("speed", "Sürət", "km/s", "010D"),
-        ObdPid("ambient", "Çöl temperaturu", "°C", "0146", add = -40.0, isTemp = true),
-        ObdPid("coolant", "Soyuducu maye", "°C", "0105", add = -40.0, warn = 105.0, isTemp = true),
-        ObdPid("coolant2", "Soyuducu maye 2", "°C", "0167", offset = 2, add = -40.0, warn = 105.0, isTemp = true),
-        ObdPid("intake", "Giriş havası", "°C", "010F", add = -40.0, isTemp = true),
-        ObdPid("oil", "Motor yağı", "°C", "015C", add = -40.0, warn = 130.0, isTemp = true),
-        ObdPid("soc", "Hibrid batareya", "%", "015B", scale = 100.0 / 255.0),
-        ObdPid("voltage", "Gərginlik", "V", "0142", len = 2, scale = 0.001, decimals = 1),
-        ObdPid("rpm", "Mühərrik dövrü", "rpm", "010C", len = 2, scale = 0.25),
-        ObdPid("load", "Mühərrik yükü", "%", "0104", scale = 100.0 / 255.0),
-        ObdPid("fuel", "Yanacaq", "%", "012F", scale = 100.0 / 255.0)
+        // ── Temperaturlar ──
+        ObdPid("ambient", "Çöl temperaturu", "°C", "0146", G_TEMP, add = -40.0, isTemp = true, rate = 5),
+        ObdPid("coolant", "Soyuducu maye", "°C", "0105", G_TEMP, add = -40.0, warn = 105.0, isTemp = true, rate = 3),
+        ObdPid("intake", "Giriş havası", "°C", "010F", G_TEMP, add = -40.0, isTemp = true, rate = 3),
+        ObdPid("catalyst", "Katalizator", "°C", "013C", G_TEMP, len = 2, scale = 0.1, add = -40.0, warn = 900.0, isTemp = true, rate = 5),
+
+        // ── Batareya və elektrik ──
+        ObdPid("soc", "Hibrid batareya (SOC)", "%", "015B", G_HYBRID, ecu = "7EC", scale = 100.0 / 255.0, decimals = 1, rate = 2),
+        ObdPid("soc_hpcm", "SOC (hibrid blok)", "%", "015B", G_HYBRID, ecu = "7EA", scale = 100.0 / 255.0, decimals = 1, rate = 5),
+        ObdPid("voltage", "12V şəbəkə", "V", "0142", G_HYBRID, len = 2, scale = 0.001, decimals = 2, rate = 3),
+        ObdPid("voltage_becm", "12V (batareya bloku)", "V", "0142", G_HYBRID, ecu = "7EC", len = 2, scale = 0.001, decimals = 2, rate = 5),
+
+        // ── Hərəkət və mühərrik ──
+        ObdPid("speed", "Sürət", "km/s", "010D", G_DRIVE),
+        ObdPid("rpm", "Mühərrik dövrü", "rpm", "010C", G_DRIVE, len = 2, scale = 0.25),
+        ObdPid("load", "Mühərrik yükü", "%", "0104", G_DRIVE, scale = 100.0 / 255.0),
+        ObdPid("torque", "Faktiki tork", "%", "0162", G_DRIVE, add = -125.0),
+        ObdPid("torque_ref", "İstinad torku", "Nm", "0163", G_DRIVE, len = 2, rate = 0),
+        ObdPid("throttle", "Drossel", "%", "0111", G_DRIVE, scale = 100.0 / 255.0),
+        ObdPid("throttle_rel", "Nisbi drossel", "%", "0145", G_DRIVE, scale = 100.0 / 255.0, rate = 2),
+        ObdPid("throttle_cmd", "Drossel əmri", "%", "014C", G_DRIVE, scale = 100.0 / 255.0, rate = 2),
+        ObdPid("pedal", "Qaz pedalı", "%", "0149", G_DRIVE, scale = 100.0 / 255.0),
+        ObdPid("timing", "Alışma bucağı", "°", "010E", G_DRIVE, scale = 0.5, add = -64.0, decimals = 1, rate = 2),
+        ObdPid("runtime", "Mühərrik işləmə vaxtı", "san", "011F", G_DRIVE, len = 2, rate = 5),
+
+        // ── Hava, yanacaq, qarışıq ──
+        ObdPid("fuel", "Yanacaq səviyyəsi", "%", "012F", G_AIR, scale = 100.0 / 255.0, rate = 10),
+        ObdPid("map", "Kollektor təzyiqi", "kPa", "010B", G_AIR, rate = 2),
+        ObdPid("baro", "Atmosfer təzyiqi", "kPa", "0133", G_AIR, rate = 10),
+        ObdPid("lambda", "Lambda (əmr)", "λ", "0144", G_AIR, len = 2, scale = 1.0 / 32768.0, decimals = 3, rate = 3),
+        ObdPid("stft", "Qısa yanacaq korreksiyası", "%", "0106", G_AIR, scale = 100.0 / 128.0, add = -100.0, decimals = 1, rate = 3),
+        ObdPid("ltft", "Uzun yanacaq korreksiyası", "%", "0107", G_AIR, scale = 100.0 / 128.0, add = -100.0, decimals = 1, rate = 10),
+
+        // ── Yürüş və vaxt ──
+        ObdPid("dist_clr", "Xəta silinəndən yürüş", "km", "0131", G_DIST, len = 2, rate = 20),
+        ObdPid("dist_mil", "Xəta lampası ilə yürüş", "km", "0121", G_DIST, len = 2, rate = 20),
+        ObdPid("warmups", "Isınma dövrləri", "", "0130", G_DIST, rate = 20),
+        ObdPid("mil_time", "Xəta lampası ilə vaxt", "dəq", "014D", G_DIST, len = 2, rate = 20)
     )
+
+    val byKey = all.associateBy { it.key }
 }
 
 data class ObdState(
@@ -56,6 +100,8 @@ data class ObdState(
     val connected: Boolean = false,
     val values: Map<String, Double> = emptyMap(),
     val unsupported: Set<String> = emptySet(),
+    val vin: String? = null,
+    val adapterVolt: String? = null,
     val updatedAt: Long = 0
 )
 
@@ -73,7 +119,7 @@ private class ElmLink(val input: InputStream, val output: OutputStream, val clos
                 if (c.toChar() == '>') return sb.toString()
                 sb.append(c.toChar())
             } else {
-                Thread.sleep(10)
+                Thread.sleep(5)
             }
         }
         throw java.io.IOException("Adapter cavab vermədi ($cmd)")
@@ -117,7 +163,7 @@ object ObdMonitor {
     @SuppressLint("MissingPermission")
     private fun open(): ElmLink = when (AppSettings.obdMode) {
         "wifi" -> {
-            // Socket birbaşa OBD şəbəkəsinə bağlanır (DualNetworkManager) — internet telefonda qalır
+            // Socket birbaşa OBD şəbəkəsinə bağlanır (DualNetworkManager)
             val s = DualNetworkManager.openObdSocket(AppSettings.obdHost, AppSettings.obdPort, 4000)
             ElmLink(s.getInputStream(), s.getOutputStream(), s)
         }
@@ -135,22 +181,76 @@ object ObdMonitor {
         else -> throw IllegalStateException("OBD söndürülüb (Ayarlar → OBD)")
     }
 
-    private fun parse(pid: ObdPid, raw: String): Double? {
-        val clean = raw.replace(" ", "").replace("\r", "").replace("\n", "").uppercase()
-        if ("NODATA" in clean || "ERROR" in clean || "?" in clean) return null
-        val head = "4" + pid.cmd.substring(1)          // 010D -> 410D
-        val i = clean.indexOf(head)
-        if (i < 0) return null
-        val data = clean.substring(i + head.length)
+    /**
+     * ATH1 + ATS0 cavabını ECU-lara görə ayırır: "7E8034105361" → {"7E8": "410536"}.
+     * Yalnız tək-kadr cavablar — bütün PID-lərimiz ≤7 baytdır.
+     */
+    private fun splitByEcu(raw: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        raw.split('\r', '\n').forEach { line0 ->
+            val line = line0.replace(" ", "").trim().uppercase()
+            if (line.length < 7 || !line.startsWith("7E")) return@forEach
+            val hdr = line.substring(0, 3)
+            val pci = line.substring(3, 5).toIntOrNull(16) ?: return@forEach
+            if (pci > 7) return@forEach
+            val data = line.substring(5)
+            if (data.length >= pci * 2 && hdr !in out) out[hdr] = data.substring(0, pci * 2)
+        }
+        return out
+    }
+
+    private fun decode(pid: ObdPid, data: String): Double? {
+        val head = "4" + pid.cmd.substring(1)
+        if (!data.startsWith(head)) return null
+        val bytes = data.substring(head.length)
         val start = pid.offset * 2
         val end = start + pid.len * 2
-        if (data.length < end) return null
+        if (bytes.length < end) return null
         var v = 0L
-        for (k in 0 until pid.len) {
-            v = v * 256 + data.substring(start + k * 2, start + k * 2 + 2).toLong(16)
-        }
+        for (k in 0 until pid.len) v = v * 256 + bytes.substring(start + k * 2, start + k * 2 + 2).toLong(16)
         return v * pid.scale + pid.add
     }
+
+    /** Sorğu ünvanı: cavab başlığı - 8 (7E8 → 7E0, 7EC → 7E4 …) */
+    private fun requestHeader(ecu: String): String =
+        Integer.toHexString(ecu.toInt(16) - 8).uppercase()
+
+    @Volatile
+    private var countSuffixOk = true
+
+    /** Bir PID-i yalnız öz blokundan oxu (fiziki ünvan + cavab sayı «1» → gözləmədən qayıdır) */
+    private fun query(link: ElmLink, pid: ObdPid, currentHeader: Array<String>): Double? {
+        val req = requestHeader(pid.ecu)
+        if (currentHeader[0] != req) { link.send("ATSH$req"); currentHeader[0] = req }
+        var raw = link.send(if (countSuffixOk) pid.cmd + "1" else pid.cmd, 2000)
+        if (countSuffixOk && raw.contains("?")) { // adapter cavab sayını tanımır
+            countSuffixOk = false
+            raw = link.send(pid.cmd, 2000)
+        }
+        val compact = raw.uppercase().replace(" ", "")
+        if ("NODATA" in compact || "ERROR" in compact) return null
+        val data = splitByEcu(raw)[pid.ecu] ?: return null
+        return decode(pid, data)
+    }
+
+    /** VIN (0902, çox-kadrlı) — qoşulanda bir dəfə */
+    private fun readVin(link: ElmLink, currentHeader: Array<String>): String? = runCatching {
+        if (currentHeader[0] != "7E0") { link.send("ATSH7E0"); currentHeader[0] = "7E0" }
+        val raw = link.send("0902", 3000)
+        val hex = StringBuilder()
+        raw.split('\r', '\n').map { it.replace(" ", "").trim().uppercase() }
+            .filter { it.startsWith("7E8") && it.length > 7 }
+            .forEach { line ->
+                val pci = line[3]
+                when (pci) {
+                    '1' -> hex.append(line.substring(7).drop(6)) // "10 14" + "49 02 01" → VIN baytları
+                    '2' -> hex.append(line.substring(5))
+                }
+            }
+        val chars = hex.chunked(2).mapNotNull { it.toIntOrNull(16) }
+            .filter { it in 0x30..0x5A }.map { it.toChar() }.joinToString("")
+        chars.takeIf { it.length >= 11 }?.take(17)
+    }.getOrNull()
 
     private suspend fun loop() {
         while (true) {
@@ -164,25 +264,38 @@ object ObdMonitor {
                 _state.value = _state.value.copy(status = "Qoşulur…", connected = false)
                 link = open()
                 link.send("ATZ", 4000)
-                delay(800)
-                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATAT1", "ATSP0")) link.send(c)
-                link.send("0100", 8000) // protokolu avtomatik tap
-                _state.value = _state.value.copy(status = "Qoşuldu ✓", connected = true)
+                delay(600)
+                // Başlıqlar AÇIQ (ATH1) — cavabın hansı blokdan gəldiyini bilmək üçün; Q07: CAN 11-bit 500k (ATSP6)
+                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP6")) link.send(c)
+                val hdr = arrayOf("")
+                countSuffixOk = true
+                val adapterV = runCatching { link.send("ATRV").trim() }.getOrNull()
+                val vin = readVin(link, hdr)
+                _state.value = _state.value.copy(
+                    status = "Qoşuldu ✓", connected = true, vin = vin, adapterVolt = adapterV
+                )
 
+                val values = _state.value.values.toMutableMap()
                 val unsupported = mutableSetOf<String>()
                 var cycle = 0
+                // Eyni bloka gedən sorğular ardıcıl olsun (ATSH az dəyişsin)
+                val ordered = ObdPids.all.sortedBy { it.ecu }
                 while (true) {
                     if (!AppVisibility.visible) { delay(2000); continue } // launcher gizlidirsə sorğu yox
-                    if (cycle % 30 == 0) unsupported.clear() // vaxtaşırı yenidən yoxla (mühərrik işə düşə bilər)
-                    val values = _state.value.values.toMutableMap()
-                    for (pid in ObdPids.all) {
+                    if (cycle % 60 == 0 && cycle > 0) unsupported.clear()
+                    for (pid in ordered) {
                         if (pid.key in unsupported) continue
-                        val v = parse(pid, link.send(pid.cmd))
-                        if (v == null) { unsupported.add(pid.key); values.remove(pid.key) }
-                        else values[pid.key] = v
+                        val due = when (pid.rate) {
+                            0 -> !values.containsKey(pid.key)
+                            1 -> true
+                            else -> cycle % pid.rate == 0
+                        }
+                        if (!due) continue
+                        val v = query(link, pid, hdr)
+                        if (v == null) { unsupported.add(pid.key); values.remove(pid.key) } else values[pid.key] = v
                     }
-                    _state.value = ObdState(
-                        status = "Qoşuldu ✓", connected = true, values = values,
+                    _state.value = _state.value.copy(
+                        status = "Qoşuldu ✓", connected = true, values = values.toMap(),
                         unsupported = unsupported.toSet(), updatedAt = System.currentTimeMillis()
                     )
                     cycle++
