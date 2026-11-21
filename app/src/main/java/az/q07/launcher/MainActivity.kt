@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import az.q07.launcher.data.AppSettings
 import az.q07.launcher.data.AppVisibility
+import az.q07.launcher.data.DualNetworkManager
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.NotesStore
 import az.q07.launcher.data.ReminderScheduler
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
         AppSettings.init(applicationContext)
         NotesStore.init(applicationContext)
         LauncherPrefs.init(applicationContext)
+        DualNetworkManager.init(applicationContext)
         WidgetStore.init(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
 

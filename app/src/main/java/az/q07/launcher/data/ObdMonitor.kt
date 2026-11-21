@@ -117,8 +117,8 @@ object ObdMonitor {
     @SuppressLint("MissingPermission")
     private fun open(): ElmLink = when (AppSettings.obdMode) {
         "wifi" -> {
-            val s = Socket()
-            s.connect(InetSocketAddress(AppSettings.obdHost, AppSettings.obdPort), 4000)
+            // Socket birbaşa OBD şəbəkəsinə bağlanır (DualNetworkManager) — internet telefonda qalır
+            val s = DualNetworkManager.openObdSocket(AppSettings.obdHost, AppSettings.obdPort, 4000)
             ElmLink(s.getInputStream(), s.getOutputStream(), s)
         }
         "bt" -> {

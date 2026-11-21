@@ -64,6 +64,8 @@ private fun TabsMode() {
     val glow = if (AppSettings.glowMode == "accent") CarColors.Accent else DefaultGlow
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        NetworkStatusBar()
+        Spacer(Modifier.height(12.dp))
         GlowingFlowNavigationBar(
             items = modules.map { CarMenuItem(title = it.shortTitle, icon = it.icon, glow =
                 if (AppSettings.glowMode == "slot") it.accent else null) },
@@ -102,6 +104,7 @@ private fun ListMode() {
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        item { NetworkStatusBar() }
         item {
             Text("Modullar", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
         }

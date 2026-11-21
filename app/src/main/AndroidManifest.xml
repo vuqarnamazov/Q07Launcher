@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Hava, yeniləmə yoxlaması, OBD Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- İkili şəbəkə: telefon hotspot (internet) + OBD Wi-Fi (lokal) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <!-- Son açılan tətbiqin slotunu işıqlandırmaq (ADB: appops set ... GET_USAGE_STATS allow) -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"

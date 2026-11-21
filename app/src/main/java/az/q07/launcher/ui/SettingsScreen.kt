@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -83,6 +84,7 @@ private enum class Section(val title: String, val icon: ImageVector) {
     Home("Əsas ekran", Icons.Filled.Home),
     Modules("Modullar", Icons.Filled.ViewModule),
     Car("Maşın / OBD", Icons.Filled.DirectionsCar),
+    Net("Şəbəkə: Telefon + OBD", Icons.Filled.Wifi),
     Weather("Hava", Icons.Filled.WbSunny),
     Perms("İcazələr", Icons.Filled.Security),
     About("Haqqında / Yeniləmə", Icons.Filled.Info)
@@ -123,7 +125,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     items = Section.entries.map { CarMenuItem(title = it.title, icon = it.icon) },
                     selectedIndex = section.ordinal,
                     onItemSelected = { section = Section.entries[it] },
-                    itemHeight = 58.dp
+                    itemHeight = 50.dp,
+                    spacing = 6.dp
                 )
             }
             // Məzmun
@@ -142,6 +145,13 @@ fun SettingsScreen(onClose: () -> Unit) {
                     Section.Home -> HomeSection()
                     Section.Modules -> ModulesSection()
                     Section.Car -> CarSection()
+                    Section.Net -> {
+                        Label(
+                            "İnternet telefondan, OBD lokal Wi-Fi-dan",
+                            "OBD socket-i yalnız OBD şəbəkəsinə bağlanır — launcher və sistem interneti telefonun hotspot-u ilə işləyir."
+                        )
+                        NetworkSetupForm()
+                    }
                     Section.Weather -> WeatherSection()
                     Section.Perms -> PermsSection()
                     Section.About -> AboutSection()
