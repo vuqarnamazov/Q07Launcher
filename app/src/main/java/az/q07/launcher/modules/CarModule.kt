@@ -83,39 +83,26 @@ object CarModule : LauncherModule {
         }
     }
 
+    // Qeyd: Q07-də standart Android VHAL emulyator HAL-ıdır (diaqnostika 21.11.2026) —
+    // ötürmə/sürət/kondisioner dəyərləri sintetikdir. Ona görə yalnız OBD (real) göstərilir.
+    private val mainKeys = listOf("ambient", "coolant", "soc", "voltage")
+    private val secondKeys = listOf("speed", "rpm", "intake", "fuel")
+
     @Composable
     override fun Summary() {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
-        val car = rememberCarApi()
-
-        // Əsas temperaturlar + batareya
-        val main = listOf("ambient", "coolant", "soc", "voltage")
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                main.forEach { key ->
-                    val pid = ObdPids.all.first { it.key == key }
-                    Tile(pid, obd.values[key], Modifier.weight(1f))
+            listOf(mainKeys, secondKeys).forEach { keys ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    keys.forEach { key ->
+                        val pid = ObdPids.all.first { it.key == key }
+                        Tile(pid, obd.values[key], Modifier.weight(1f))
+                    }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SimpleTile("Ötürmə", car.gear ?: "—", "", Modifier.weight(1f))
-                SimpleTile(
-                    "Sürət",
-                    (obd.values["speed"] ?: car.speedKmh)?.let { Math.round(it).toString() } ?: "—",
-                    "km/s", Modifier.weight(1f)
-                )
-                SimpleTile(
-                    "Kondisioner",
-                    car.hvacSetC?.let { "%.1f".format(it) } ?: "—", "°C", Modifier.weight(1f)
-                )
-                SimpleTile(
-                    "Əyləc",
-                    when (car.parking) { true -> "P ●"; false -> "Açıq"; null -> "—" }, "", Modifier.weight(1f)
-                )
-            }
             Text(
-                "OBD: ${obd.status}" + if (!car.available) "  ·  Car API: əlçatan deyil" else "",
+                "OBD: ${obd.status}",
                 fontSize = 13.sp,
                 color = if (obd.connected) CarColors.Green else CarColors.TextSecondary
             )
@@ -126,9 +113,7 @@ object CarModule : LauncherModule {
     override fun Expanded() {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
-        val car = rememberCarApi()
-        val rest = ObdPids.all.filter { it.key !in setOf("ambient", "coolant", "soc", "voltage") }
-
+        val rest = ObdPids.all.filter { it.key !in mainKeys && it.key !in secondKeys }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             rest.chunked(4).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -136,17 +121,9 @@ object CarModule : LauncherModule {
                     repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
                 }
             }
-            if (car.available) {
-                Text(
-                    "Car API: çöl ${car.outsideC?.let { "%.1f°C".format(it) } ?: "—"} · gecə rejimi ${
-                        when (car.night) { true -> "bəli"; false -> "xeyr"; null -> "—" }
-                    }",
-                    fontSize = 13.sp, color = CarColors.TextSecondary
-                )
-            }
             Text(
                 "Mühərrik işləmirsə (elektrik rejimi), motor parametrləri «—» göstərə bilər. " +
-                    "Adapter: Ayarlar → OBD.",
+                    "Maşının daxili sistemi real göstəriciləri kənar tətbiqlərə vermir — mənbə yalnız OBD adapteridir.",
                 fontSize = 13.sp, color = CarColors.TextSecondary
             )
         }
