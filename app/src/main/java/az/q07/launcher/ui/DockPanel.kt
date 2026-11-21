@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -182,7 +184,8 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                 val slotSpacing = if (count >= 6) 6.dp else 8.dp
                 val compactClock = maxWidth < 270.dp
                 val clockH = if (compactClock) 80.dp else 96.dp
-                val fixed = 40.dp + clockH + btnH * 2 + gap * 4 + 12.dp + slotSpacing * (count - 1)
+                val gaugesH = if (AppSettings.compactMode) 150.dp else 0.dp
+                val fixed = 40.dp + clockH + btnH * 3 + gaugesH + gap * 5 + 12.dp + slotSpacing * (count - 1)
                 val itemH = ((maxHeight - fixed) / count).coerceIn(40.dp, 68.dp)
                 val boxHeight = maxHeight
                 Column(
@@ -211,26 +214,37 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                         verticalArrangement = Arrangement.spacedBy(gap),
                         modifier = Modifier.padding(top = gap)
                     ) {
-                        DockButton(
-                            label = homeLabel, subtitle = homeSub, bitmap = null,
-                            vector = Icons.Filled.SwapHoriz,
-                            tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
-                            modifier = Modifier.fillMaxWidth().height(btnH),
-                            onClick = home.toggle
+                        // Kompakt rejimdə maşın göstəriciləri solda daim görünür
+                        if (AppSettings.compactMode) az.q07.launcher.modules.CarMiniGauges()
+                        // Sabit düymələr: iPhone kimi sürüşdürüb təsdiqlə (təsadüfən basılmasın)
+                        SlideToConfirm(
+                            label = if (home.isDefault) "Zavoda qaytar" else "Q07-ni defolt et",
+                            color = if (home.isDefault) CarColors.Warning else CarColors.Green,
+                            icon = Icons.Filled.SwapHoriz,
+                            height = btnH,
+                            onConfirm = home.toggle
+                        )
+                        SlideToConfirm(
+                            label = "Zavod menyusu",
+                            color = CarColors.Warning,
+                            icon = Icons.Filled.Home,
+                            height = btnH,
+                            onConfirm = onFactory
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DockButton(
-                                label = "", subtitle = null, bitmap = null,
+                                label = "Ayarlar", subtitle = null, bitmap = null,
                                 vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
-                                modifier = Modifier.height(btnH),
+                                modifier = Modifier.weight(1f).height(btnH),
                                 onClick = { settingsOpen = true }
                             )
                             DockButton(
-                                label = "Zavod menyusu", subtitle = null, bitmap = null,
-                                vector = Icons.Filled.Home, tint = CarColors.Warning,
+                                label = if (AppSettings.compactMode) "Tam" else "Kompakt",
+                                subtitle = null, bitmap = null,
+                                vector = if (AppSettings.compactMode) Icons.Filled.Fullscreen else Icons.Filled.VerticalSplit,
+                                tint = CarColors.Accent,
                                 modifier = Modifier.weight(1f).height(btnH),
-                                onLongClick = { QuickActions.openHomeSettings(context) },
-                                onClick = onFactory
+                                onClick = { AppSettings.update { compactMode = !compactMode } }
                             )
                         }
                     }
@@ -259,19 +273,19 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                     modifier = Modifier.weight(0.8f).fillMaxHeight(),
                     onClick = { settingsOpen = true }
                 )
-                DockButton(
-                    label = if (home.isDefault) "Q07" else "Zavod", subtitle = "Defolt", bitmap = null,
-                    vector = Icons.Filled.SwapHoriz,
-                    tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
-                    modifier = Modifier.weight(0.8f).fillMaxHeight(),
-                    onClick = home.toggle
+                SlideToConfirm(
+                    label = if (home.isDefault) "Zavoda" else "Defolt et",
+                    color = if (home.isDefault) CarColors.Warning else CarColors.Green,
+                    icon = Icons.Filled.SwapHoriz,
+                    modifier = Modifier.weight(1.3f),
+                    onConfirm = home.toggle
                 )
-                DockButton(
-                    label = "Zavod", subtitle = null, bitmap = null,
-                    vector = Icons.Filled.Home, tint = CarColors.Warning,
-                    modifier = Modifier.weight(0.8f).fillMaxHeight(),
-                    onLongClick = { QuickActions.openHomeSettings(context) },
-                    onClick = onFactory
+                SlideToConfirm(
+                    label = "Zavod",
+                    color = CarColors.Warning,
+                    icon = Icons.Filled.Home,
+                    modifier = Modifier.weight(1.1f),
+                    onConfirm = onFactory
                 )
             }
         }

@@ -187,3 +187,46 @@ object CarModule : LauncherModule {
         }
     }
 }
+
+/**
+ * Kompakt rejim üçün kiçik göstərici bloku (solda, digər tətbiqlər açıq olanda da görünür):
+ * batareya SOC, soyuducu maye, sürət, 12V.
+ */
+@Composable
+fun CarMiniGauges() {
+    DisposableEffect(Unit) {
+        ObdMonitor.acquire()
+        onDispose { ObdMonitor.release() }
+    }
+    val obd by ObdMonitor.state.collectAsState()
+    val keys = listOf("soc", "coolant", "speed", "voltage")
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(CarColors.Panel)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        keys.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { key ->
+                    val pid = ObdPids.byKey.getValue(key)
+                    val v = obd.values[key]
+                    Column(Modifier.weight(1f)) {
+                        Text(pid.name.substringBefore(" ("), fontSize = 11.sp, color = CarColors.TextSecondary, maxLines = 1)
+                        Text(
+                            (v?.let { ObdMonitor.format(pid, it) } ?: "—") + " " + pid.unit,
+                            fontSize = 18.sp, fontWeight = FontWeight.Medium, color = CarColors.TextPrimary, maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            if (obd.connected) "OBD ✓" else "OBD: ${obd.status}",
+            fontSize = 11.sp, maxLines = 1,
+            color = if (obd.connected) CarColors.Green else CarColors.TextSecondary
+        )
+    }
+}

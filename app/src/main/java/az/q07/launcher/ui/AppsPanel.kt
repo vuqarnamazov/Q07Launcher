@@ -2,6 +2,8 @@ package az.q07.launcher.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -141,7 +143,7 @@ private fun AppActionsDialog(app: AppEntry, onDismiss: () -> Unit) {
         icon = { Image(app.icon, null, Modifier.size(56.dp)) },
         title = { Text(LauncherPrefs.displayLabel(app.key, app.label)) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (renaming) {
                     OutlinedTextField(
                         value = newName,
@@ -159,6 +161,17 @@ private fun AppActionsDialog(app: AppEntry, onDismiss: () -> Unit) {
                         }) { Text("Orijinal ad") }
                     }
                 } else {
+                    // Çoxpəncərə: tətbiqi ayrı pəncərədə aç (bir neçə tətbiq eyni anda)
+                    listOf(
+                        az.q07.launcher.data.WindowLauncher.Area.CENTER,
+                        az.q07.launcher.data.WindowLauncher.Area.LEFT_HALF,
+                        az.q07.launcher.data.WindowLauncher.Area.RIGHT_HALF,
+                        az.q07.launcher.data.WindowLauncher.Area.BESIDE_DOCK
+                    ).forEach { area ->
+                        MenuItem("🗗 ${area.title} aç") {
+                            AppRepository.launch(context, app, area); onDismiss()
+                        }
+                    }
                     MenuItem("Adını dəyiş") { renaming = true }
                     MenuItem(if (hidden) "Siyahıda göstər" else "Siyahıdan gizlət") {
                         LauncherPrefs.setHidden(app.key, !hidden); onDismiss()

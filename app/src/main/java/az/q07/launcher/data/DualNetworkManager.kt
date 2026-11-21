@@ -206,6 +206,7 @@ object DualNetworkManager {
             obdNetwork = net
             obdConnected = true
             obdStatus = "Qoşulub ✓"
+            if (AppSettings.obdMode != "wifi") AppSettings.update { obdMode = "wifi" }
             ObdMonitor.restart()
         }
         releaseRequest()
@@ -231,6 +232,8 @@ object DualNetworkManager {
                 main.post {
                     obdConnected = true
                     obdStatus = "Qoşulub ✓"
+                    // OBD şəbəkəsi var → oxuma rejimi mütləq Wi-Fi olsun (ayarlar sıfırlansa belə)
+                    if (AppSettings.obdMode != "wifi") AppSettings.update { obdMode = "wifi" }
                     ObdMonitor.restart()
                     // Çip iki şəbəkəni saxlamırsa hotspot düşüb — vəziyyəti yoxla
                     main.postDelayed({ refreshPhoneState() }, 2500)

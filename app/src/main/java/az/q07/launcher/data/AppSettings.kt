@@ -50,12 +50,15 @@ object AppSettings {
     var middleTabs by mutableStateOf(true)          // orta panel: tablar (true) və ya siyahı
     var selectedTab by mutableStateOf("car")
 
+    // Çoxpəncərə: kompakt rejimdə launcher solda dar panel olur, tətbiqlər sağda pəncərədə açılır
+    var compactMode by mutableStateOf(false)
+
     // Modullar
     val moduleOrder = mutableStateListOf<String>()
     val disabledModules = mutableStateListOf<String>()
 
     // OBD (ELM327)
-    var obdMode by mutableStateOf("off")            // off | wifi | bt
+    var obdMode by mutableStateOf("wifi")           // off | wifi | bt  (Q07: WiFi-OBDII standartdır)
     var obdHost by mutableStateOf("192.168.0.10")
     var obdPort by mutableIntStateOf(35000)
     var obdBtMac by mutableStateOf("")
@@ -80,7 +83,7 @@ object AppSettings {
             moduleOrder.addAll(getString("modOrder", "")!!.split(",").filter { it.isNotBlank() })
             disabledModules.clear()
             disabledModules.addAll(getString("modOff", "")!!.split(",").filter { it.isNotBlank() })
-            obdMode = getString("obdMode", "off")!!
+            obdMode = getString("obdMode", "wifi")!!
             obdHost = getString("obdHost", "192.168.0.10")!!
             obdPort = getInt("obdPort", 35000)
             obdBtMac = getString("obdBtMac", "")!!
@@ -93,6 +96,7 @@ object AppSettings {
             nightDim = getBoolean("nightDim", true)
             middleTabs = getBoolean("middleTabs", true)
             selectedTab = getString("tab", "car")!!
+            compactMode = getBoolean("compact", false)
         }
     }
 
@@ -123,6 +127,7 @@ object AppSettings {
             .putBoolean("nightDim", nightDim)
             .putBoolean("middleTabs", middleTabs)
             .putString("tab", selectedTab)
+            .putBoolean("compact", compactMode)
             .apply()
     }
 }

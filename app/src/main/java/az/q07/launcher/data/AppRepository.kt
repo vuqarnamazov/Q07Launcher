@@ -42,12 +42,8 @@ object AppRepository {
             .sortedBy { it.label.lowercase() }
     }
 
-    fun launch(context: Context, app: AppEntry) {
-        val intent = Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setComponent(app.component)
-            .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        if (!QuickActions.start(context, intent)) {
+    fun launch(context: Context, app: AppEntry, area: WindowLauncher.Area = WindowLauncher.defaultArea()) {
+        if (!WindowLauncher.launch(context, app.component, area)) {
             QuickActions.toast(context, "${app.label} açıla bilmədi")
         }
     }
