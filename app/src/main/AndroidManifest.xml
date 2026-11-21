@@ -55,13 +55,6 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
 
-            <!-- Əsas ekran (HOME) kimi -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-
             <!-- Adi tətbiq ikonu kimi də açılsın -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -79,6 +72,22 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!--
+          HOME (əsas ekran) rolu ayrıca alias-dadır və STANDART OLARAQ SÖNÜLÜDÜR.
+          Zavod launcher-i əsas qalır. Ayarlar → Əsas ekran bölməsindən açılıb-söndürülür.
+        -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
 
         <receiver
             android:name=".data.ReminderReceiver"

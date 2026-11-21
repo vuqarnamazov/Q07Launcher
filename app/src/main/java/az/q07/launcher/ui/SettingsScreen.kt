@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -60,6 +61,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import az.q07.launcher.BuildConfig
 import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.HomeMode
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.ObdMonitor
 import az.q07.launcher.data.QuickActions
@@ -74,6 +76,7 @@ import java.net.URL
 
 private enum class Section(val title: String, val icon: ImageVector) {
     Look("Görünüş", Icons.Filled.Palette),
+    Home("Əsas ekran", Icons.Filled.Home),
     Modules("Modullar", Icons.Filled.ViewModule),
     Car("Maşın / OBD", Icons.Filled.DirectionsCar),
     Weather("Hava", Icons.Filled.WbSunny),
@@ -141,6 +144,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                 Text(section.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
                 when (section) {
                     Section.Look -> LookSection()
+                    Section.Home -> HomeSection()
                     Section.Modules -> ModulesSection()
                     Section.Car -> CarSection()
                     Section.Weather -> WeatherSection()
@@ -220,6 +224,37 @@ private fun LookSection() {
     Chips(cols.map { "$it" }, cols.indexOf(AppSettings.gridColumns)) { i ->
         AppSettings.update { gridColumns = cols[i] }
     }
+}
+
+@Composable
+private fun HomeSection() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(HomeMode.isEnabled(context)) }
+    Label(
+        "Q07 Launcher-i əsas ekran kimi istifadə et",
+        "Söndürülü olanda zavod launcher-i əsas qalır, Q07 Launcher adi tətbiq kimi açılır."
+    )
+    SwitchRow(
+        if (enabled) "Aktivdir — Home düyməsi seçim verir" else "Söndürülüb — zavod launcher-i əsasdır",
+        null, enabled
+    ) { on ->
+        if (on) HomeMode.enable(context) else HomeMode.disable(context)
+        enabled = HomeMode.isEnabled(context)
+    }
+    Text(
+        "Aktiv edəndə sistem seçim ekranı açılır: «Q07 Launcher» seç. " +
+            "Geri qaytarmaq üçün bu açarı söndür — zavod launcher-i dərhal əsas olur.",
+        fontSize = 14.sp, color = CarColors.TextSecondary
+    )
+    Label("Təcili geri qaytarma (kompüterdən)")
+    Text(
+        "adb shell pm disable az.q07.launcher/az.q07.launcher.HomeAlias",
+        fontSize = 14.sp, color = CarColors.Warning
+    )
+    Text(
+        "adb shell cmd package set-home-activity com.incall.apps.sdalauncher/com.incall.apps.model_main.MainActivity",
+        fontSize = 14.sp, color = CarColors.Warning
+    )
 }
 
 @Composable
