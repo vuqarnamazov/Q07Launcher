@@ -52,6 +52,14 @@ object DualNetworkManager {
     var autoStart by mutableStateOf(false)
         private set
 
+    /**
+     * Wi-Fi prioriteti (maşının Wi-Fi modulu eyni anda yalnız BİR şəbəkəyə qoşula bilir):
+     *  "obd"   → Wi-Fi həmişə OBD-də saxlanılır, internet maşının SIM-i ilə
+     *  "phone" → Wi-Fi telefonun hotspot-unda (internet), OBD Wi-Fi istifadə olunmur
+     */
+    var wifiPriority by mutableStateOf("obd")
+        private set
+
     // ── Canlı vəziyyət (UI üçün) ──
     var phoneConnected by mutableStateOf(false)
         private set
@@ -82,11 +90,20 @@ object DualNetworkManager {
         hotspotPass = prefs.getString("hsPass", "")!!
         obdSsid = prefs.getString("obdSsid", DEFAULT_OBD)!!.let { if (it == "WiFi_OBDII" || it == "WiFi-OBDII") DEFAULT_OBD else it }
         obdPass = prefs.getString("obdPass", "")!!
-        autoStart = prefs.getBoolean("auto", false)
+        autoStart = prefs.getBoolean("auto", true)
+        wifiPriority = prefs.getString("prio", "obd")!!
         startMonitoring()
-        if (autoStart) {
-            if (hotspotSsid.isNotBlank()) connectToPhoneHotspot(hotspotSsid, hotspotPass)
-            if (obdSsid.isNotBlank()) connectToObd(obdSsid, obdPass)
+        if (hotspotSsid.isNotBlank()) connectToPhoneHotspot(hotspotSsid, hotspotPass)
+        // OBD prioritetdədirsə — launcher açılan kimi avtomatik qoşul və saxla
+        if (autoStart && wifiPriority == "obd" && obdSsid.isNotBlank()) connectToObd(obdSsid, obdPass)
+    }
+
+    fun setPriority(p: String) {
+        wifiPriority = p
+        prefs.edit().putString("prio", p).apply()
+        if (p == "obd") connectToObd() else {
+            disconnectObd()
+            if (hotspotSsid.isNotBlank()) connectToPhoneHotspot()
         }
     }
 
@@ -168,6 +185,7 @@ object DualNetworkManager {
 
     private fun reconnectHotspot() {
         refreshPhoneState()
+        if (obdWanted && wifiPriority == "obd") return // Wi-Fi OBD-də saxlanılır
         if (!phoneConnected && hotspotSsid.isNotBlank()) {
             connectToPhoneHotspot()
             lastMessage = "Telefon hotspot-una yenidən qoşulma cəhdi…"
@@ -183,16 +201,16 @@ object DualNetworkManager {
      */
     fun connectToObd(ssid: String = obdSsid, password: String = obdPass) {
         if (ssid.isBlank()) { obdStatus = "OBD SSID daxil edilməyib"; return }
-        // Maşın artıq adapterin Wi-Fi-ına qoşuludursa — sistem pəncərəsinə ehtiyac yoxdur
+        // Sistem artıq OBD-dədirsə — dərhal istifadə et (specifier sorğusu yenə də verilir ki, bağlantı SAXLANILSIN)
         findSystemObdNetwork()?.let { net ->
             obdNetwork = net
             obdConnected = true
-            obdStatus = "Qoşulub ✓ (sistem Wi-Fi)"
+            obdStatus = "Qoşulub ✓"
             ObdMonitor.restart()
-            return
         }
-        disconnectObd()
+        releaseRequest()
         obdWanted = true
+        retryCount = 0
 
         val spec = WifiNetworkSpecifier.Builder().apply {
             if (ssid.contains('*') || ssid.contains('?')) setSsidPattern(PatternMatcher(toAndroidGlob(ssid), PatternMatcher.PATTERN_SIMPLE_GLOB))
@@ -209,6 +227,7 @@ object DualNetworkManager {
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 obdNetwork = network
+                retryCount = 0
                 main.post {
                     obdConnected = true
                     obdStatus = "Qoşulub ✓"
@@ -222,9 +241,8 @@ object DualNetworkManager {
                 obdNetwork = null
                 main.post {
                     obdConnected = false
-                    obdStatus = "Tapılmadı və ya imtina edildi"
                     obdCallback = null
-                    reconnectHotspot()
+                    scheduleRetry("Adapter tapılmadı (maşın sönülü ola bilər)")
                 }
             }
 
@@ -232,9 +250,7 @@ object DualNetworkManager {
                 obdNetwork = null
                 main.post {
                     obdConnected = false
-                    obdStatus = "Bağlantı itdi"
-                    // OBD itəndə sistem internet Wi-Fi-na qayıtsın
-                    reconnectHotspot()
+                    scheduleRetry("Bağlantı itdi")
                 }
             }
         }
@@ -290,13 +306,33 @@ object DualNetworkManager {
         }
     }
 
+    /** İstifadəçi «Ayır» basanda: OBD-ni burax, Wi-Fi telefona qayıtsın */
     fun disconnectObd() {
         obdWanted = false
-        obdCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
-        obdCallback = null
+        main.removeCallbacksAndMessages(RETRY_TOKEN)
+        releaseRequest()
         obdNetwork = null
         obdConnected = false
         obdStatus = "Qoşulmayıb"
+        if (hotspotSsid.isNotBlank()) main.postDelayed({ reconnectHotspot() }, 2000)
+    }
+
+    private fun releaseRequest() {
+        obdCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
+        obdCallback = null
+    }
+
+    private val RETRY_TOKEN = Any()
+    private var retryCount = 0
+
+    /** OBD itəndə özü yenidən qoşulur (5 san → 15 san → 30 san…), istifadəçidən heç nə istəmədən */
+    private fun scheduleRetry(reason: String) {
+        if (!obdWanted || wifiPriority != "obd") { obdStatus = reason; return }
+        retryCount++
+        val delay = when { retryCount <= 2 -> 5_000L; retryCount <= 5 -> 15_000L; else -> 30_000L }
+        obdStatus = "$reason — ${delay / 1000} san sonra yenidən"
+        main.removeCallbacksAndMessages(RETRY_TOKEN)
+        main.postAtTime({ if (obdWanted) connectToObd() }, RETRY_TOKEN, android.os.SystemClock.uptimeMillis() + delay)
     }
 
     /**

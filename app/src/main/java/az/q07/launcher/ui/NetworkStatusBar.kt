@@ -185,6 +185,23 @@ fun NetworkSetupForm(onSaved: (() -> Unit)? = null) {
             singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(op, { op = it }, label = { Text("Adapter şifrəsi (açıqdırsa boş qoy)") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        Text("Wi-Fi prioriteti", fontSize = 17.sp, color = CarColors.TextPrimary)
+        Text(
+            "Maşının Wi-Fi modulu eyni anda yalnız bir şəbəkəyə qoşulur.",
+            fontSize = 13.sp, color = CarColors.TextSecondary
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("obd" to "OBD (internet SIM-dən)", "phone" to "Telefon hotspot").forEach { (k, label) ->
+                val sel = dm.wifiPriority == k
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (sel) CarColors.Accent else CarColors.PanelAlt)
+                        .clickable { dm.setPriority(k) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) { Text(label, fontSize = 15.sp, color = if (sel) Color.Black else CarColors.TextPrimary) }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Launcher açılanda avtomatik qoşul", fontSize = 16.sp, color = CarColors.TextPrimary,
                 modifier = Modifier.weight(1f))
