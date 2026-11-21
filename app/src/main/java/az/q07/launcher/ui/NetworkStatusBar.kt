@@ -77,9 +77,9 @@ fun NetworkStatusBar(modifier: Modifier = Modifier) {
     // Wi-Fi qoşulub, amma məlumat gəlmirsə — bunu açıq göstər
     val obdText = when {
         !dm.obdConnected -> dm.obdStatus
-        obdData.values.isNotEmpty() -> "Wi-Fi ✓ · ${obdData.values.size} göstərici"
-        obdData.status.startsWith("Xəta") -> "Wi-Fi ✓ · " + obdData.status.removePrefix("Xəta: ").substringBefore(" — 5")
-        else -> "Wi-Fi ✓ · ${obdData.status}"
+        obdData.values.isNotEmpty() -> "${obdData.values.size} göstərici ✓"
+        obdData.status.startsWith("Xəta") -> obdData.status.removePrefix("Xəta: ").substringBefore(" — 5")
+        else -> obdData.status
     }
     val obdColor = when {
         !dm.obdConnected -> CarColors.Danger

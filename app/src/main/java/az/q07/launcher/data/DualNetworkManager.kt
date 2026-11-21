@@ -387,8 +387,11 @@ object DualNetworkManager {
         lastSocketInfo = errors.joinToString(" | ")
         android.util.Log.w("Q07OBD", "socket failed: $lastSocketInfo vpn=$vpn")
         throw java.io.IOException(
-            if (vpn != null) "VPN ($vpn) OBD-yə yolu bağlayır — ZeroTier/VPN-i söndür"
-            else "Adapterə qoşulmaq olmadı: ${errors.lastOrNull()}"
+            when {
+                net == null -> "Maşın OBD Wi-Fi-a qoşulu deyil"
+                vpn != null -> "Adapter cavab vermir (VPN $vpn aktivdir)"
+                else -> "Adapter cavab vermir"
+            }
         )
     }
 }

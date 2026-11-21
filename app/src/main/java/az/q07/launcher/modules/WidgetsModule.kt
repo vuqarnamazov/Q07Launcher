@@ -171,7 +171,8 @@ object WidgetsModule : LauncherModule {
                         ) {
                             Text(label, fontSize = 18.sp, color = CarColors.TextPrimary)
                             Text(
-                                "$appLabel · ${p.minWidth}×${p.minHeight}",
+                                "$appLabel · ${p.minWidth}×${p.minHeight}" +
+                                    if (p.initialLayout == 0) " · ⚠ yalnız zavod launcher-ində işləyir" else "",
                                 fontSize = 13.sp, color = CarColors.TextSecondary
                             )
                         }

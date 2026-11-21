@@ -102,7 +102,17 @@ object WidgetStore {
         if (!::prefs.isInitialized) return
         carWidgets.clear()
         if (!carWidgetsEnabled) { carBindNeeded = emptyList(); return }
-        val installed = runCatching { manager.installedProviders.map { it.provider }.toSet() }.getOrDefault(emptySet())
+        // initialLayout = 0 olan Changan «SDA» vidcetləri yalnız zavod launcher-ində (SDA kart sistemi) işləyir —
+        // üçüncü tərəf host-da «Couldn't add widget» verir. Belələrini qoymuruq.
+        val installed = runCatching {
+            manager.installedProviders.filter { it.initialLayout != 0 }.map { it.provider }.toSet()
+        }.getOrDefault(emptySet())
+        // Əvvəlki versiyada bağlanmış işləməyən vidcetləri təmizlə
+        for (cmp in AUTO_CAR) if (cmp !in installed) {
+            val key = "car_" + cmp.flattenToShortString()
+            val old = prefs.getInt(key, -1)
+            if (old != -1) { runCatching { host.deleteAppWidgetId(old) }; prefs.edit().remove(key).apply() }
+        }
         val need = mutableListOf<ComponentName>()
         for (cmp in AUTO_CAR) {
             if (cmp !in installed) continue
