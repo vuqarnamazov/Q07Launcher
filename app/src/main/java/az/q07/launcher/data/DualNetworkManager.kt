@@ -342,12 +342,53 @@ object DualNetworkManager {
      * OBD socket-i: birbaşa obdNetwork üzərindən (bindProcessToNetwork YOX).
      * obdNetwork yoxdursa — adi socket (istifadəçi OBD-yə əl ilə qoşulubsa).
      */
+    /** Aktiv VPN (məs. ZeroTier) — VPN bütün tətbiqləri tutursa OBD-yə yol bağlana bilər */
+    fun activeVpnName(): String? {
+        val vpn = cm.allNetworks.firstOrNull {
+            cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        } ?: return null
+        return cm.getLinkProperties(vpn)?.interfaceName ?: "VPN"
+    }
+
+    /** Son qoşulma cəhdinin izahı (ekranda və logcat-da göstərilir) */
+    @Volatile
+    var lastSocketInfo: String = ""
+
+    /**
+     * OBD socket-i. Bir neçə yol sınanır:
+     *  1) OBD Wi-Fi şəbəkəsinə bindSocket  2) həmin şəbəkənin socketFactory-si  3) adi socket.
+     * VPN (ZeroTier və s.) «bypass»-a icazə vermirsə 1–2 EPERM verir — onda 3 sınanır.
+     */
     fun openObdSocket(host: String, port: Int, timeoutMs: Int = 4000): Socket {
-        // OBD şəbəkəsi: ya specifier ilə alınan, ya da adapterin alt şəbəkəsində olan sistem Wi-Fi-ı
         val net = obdNetwork ?: findNetworkForHost(host)
-        val s = Socket()
-        if (net != null) net.bindSocket(s)
-        s.connect(InetSocketAddress(host, port), timeoutMs)
-        return s
+        val errors = mutableListOf<String>()
+        if (net != null) {
+            try {
+                val s = Socket()
+                net.bindSocket(s)
+                s.connect(InetSocketAddress(host, port), timeoutMs)
+                lastSocketInfo = "bind ✓"
+                return s
+            } catch (e: Exception) { errors += "bind: ${e.message ?: e.javaClass.simpleName}" }
+            try {
+                val s = net.socketFactory.createSocket()
+                s.connect(InetSocketAddress(host, port), timeoutMs)
+                lastSocketInfo = "factory ✓"
+                return s
+            } catch (e: Exception) { errors += "factory: ${e.message ?: e.javaClass.simpleName}" }
+        } else errors += "OBD Wi-Fi şəbəkəsi tapılmadı"
+        try {
+            val s = Socket()
+            s.connect(InetSocketAddress(host, port), timeoutMs)
+            lastSocketInfo = "plain ✓"
+            return s
+        } catch (e: Exception) { errors += "plain: ${e.message ?: e.javaClass.simpleName}" }
+        val vpn = activeVpnName()
+        lastSocketInfo = errors.joinToString(" | ")
+        android.util.Log.w("Q07OBD", "socket failed: $lastSocketInfo vpn=$vpn")
+        throw java.io.IOException(
+            if (vpn != null) "VPN ($vpn) OBD-yə yolu bağlayır — ZeroTier/VPN-i söndür"
+            else "Adapterə qoşulmaq olmadı: ${errors.lastOrNull()}"
+        )
     }
 }

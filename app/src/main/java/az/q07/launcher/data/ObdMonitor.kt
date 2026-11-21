@@ -102,7 +102,9 @@ data class ObdState(
     val unsupported: Set<String> = emptySet(),
     val vin: String? = null,
     val adapterVolt: String? = null,
-    val updatedAt: Long = 0
+    val updatedAt: Long = 0,
+    /** Diaqnostika: son xam cavab / socket yolu */
+    val detail: String = ""
 )
 
 private class ElmLink(val input: InputStream, val output: OutputStream, val closeable: Closeable) {
@@ -134,6 +136,8 @@ object ObdMonitor {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var job: Job? = null
     private var users = 0
+
+    private fun log(msg: String) { android.util.Log.i("Q07OBD", msg) }
 
     private val _state = MutableStateFlow(ObdState())
     val state: StateFlow<ObdState> = _state
@@ -217,6 +221,10 @@ object ObdMonitor {
 
     @Volatile
     private var countSuffixOk = true
+    @Volatile
+    private var lastRaw = ""
+    @Volatile
+    private var verbose = true
 
     /** Bir PID-i yalnız öz blokundan oxu (fiziki ünvan + cavab sayı «1» → gözləmədən qayıdır) */
     private fun query(link: ElmLink, pid: ObdPid, currentHeader: Array<String>): Double? {
@@ -227,6 +235,8 @@ object ObdMonitor {
             countSuffixOk = false
             raw = link.send(pid.cmd, 2000)
         }
+        lastRaw = "${pid.cmd}@${pid.ecu} → ${raw.replace('\r', ' ').replace('\n', ' ').trim()}"
+        if (verbose) log(lastRaw)
         val compact = raw.uppercase().replace(" ", "")
         if ("NODATA" in compact || "ERROR" in compact) return null
         val data = splitByEcu(raw)[pid.ecu] ?: return null
@@ -254,6 +264,9 @@ object ObdMonitor {
 
     private suspend fun loop() {
         while (true) {
+            if (AppSettings.obdMode == "off" && runCatching { DualNetworkManager.findSystemObdNetwork() }.getOrNull() != null) {
+                AppSettings.update { obdMode = "wifi" } // maşın artıq OBD Wi-Fi-dadır
+            }
             if (AppSettings.obdMode == "off") {
                 _state.value = ObdState(status = "Söndürülüb — Ayarlar → OBD")
                 delay(3000)
@@ -262,27 +275,33 @@ object ObdMonitor {
             var link: ElmLink? = null
             try {
                 _state.value = _state.value.copy(status = "Qoşulur…", connected = false)
+                log("open mode=${AppSettings.obdMode} host=${AppSettings.obdHost}:${AppSettings.obdPort}")
                 link = open()
-                link.send("ATZ", 4000)
+                log("socket ok (${DualNetworkManager.lastSocketInfo})")
+                log("ATZ → " + link.send("ATZ", 4000).trim())
                 delay(600)
                 // Başlıqlar AÇIQ (ATH1) — cavabın hansı blokdan gəldiyini bilmək üçün; Q07: CAN 11-bit 500k (ATSP6)
-                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP6")) link.send(c)
+                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP6")) log("$c → " + link.send(c).trim())
                 val hdr = arrayOf("")
                 countSuffixOk = true
                 val adapterV = runCatching { link.send("ATRV").trim() }.getOrNull()
                 val vin = readVin(link, hdr)
+                log("VIN=$vin volt=$adapterV")
+                verbose = true
                 _state.value = _state.value.copy(
-                    status = "Qoşuldu ✓", connected = true, vin = vin, adapterVolt = adapterV
+                    status = "Qoşuldu ✓ — oxunur…", connected = true, vin = vin, adapterVolt = adapterV,
+                    detail = "socket: ${DualNetworkManager.lastSocketInfo}"
                 )
 
                 val values = _state.value.values.toMutableMap()
                 val unsupported = mutableSetOf<String>()
+                val misses = HashMap<String, Int>()
                 var cycle = 0
                 // Eyni bloka gedən sorğular ardıcıl olsun (ATSH az dəyişsin)
                 val ordered = ObdPids.all.sortedBy { it.ecu }
                 while (true) {
                     if (!AppVisibility.visible) { delay(2000); continue } // launcher gizlidirsə sorğu yox
-                    if (cycle % 60 == 0 && cycle > 0) unsupported.clear()
+                    if (cycle % 60 == 0 && cycle > 0) { unsupported.clear(); misses.clear() }
                     for (pid in ordered) {
                         if (pid.key in unsupported) continue
                         val due = when (pid.rate) {
@@ -292,11 +311,21 @@ object ObdMonitor {
                         }
                         if (!due) continue
                         val v = query(link, pid, hdr)
-                        if (v == null) { unsupported.add(pid.key); values.remove(pid.key) } else values[pid.key] = v
+                        if (v == null) {
+                            // 3 dəfə ardıcıl cavab yoxdursa — bu maşında yoxdur
+                            val m = (misses[pid.key] ?: 0) + 1
+                            misses[pid.key] = m
+                            if (m >= 3) { unsupported.add(pid.key); values.remove(pid.key) }
+                        } else { values[pid.key] = v; misses.remove(pid.key) }
                     }
+                    if (cycle == 0) log("1-ci dövr: ${values.size} dəyər, cavabsız: ${misses.keys}")
+                    verbose = cycle < 1
                     _state.value = _state.value.copy(
-                        status = "Qoşuldu ✓", connected = true, values = values.toMap(),
-                        unsupported = unsupported.toSet(), updatedAt = System.currentTimeMillis()
+                        status = if (values.isEmpty()) "Qoşuldu, amma maşın cavab vermir (kontakt açıqdır?)"
+                                 else "Qoşuldu ✓ · ${values.size} göstərici",
+                        connected = true, values = values.toMap(),
+                        unsupported = unsupported.toSet(), updatedAt = System.currentTimeMillis(),
+                        detail = lastRaw
                     )
                     cycle++
                     delay(AppSettings.obdIntervalMs.toLong())
@@ -305,7 +334,9 @@ object ObdMonitor {
                 link?.close()
                 throw e
             } catch (e: Throwable) {
+                log("XƏTA: $e  socket=${DualNetworkManager.lastSocketInfo}")
                 _state.value = _state.value.copy(
+                    detail = DualNetworkManager.lastSocketInfo,
                     status = "Xəta: ${e.message ?: e.javaClass.simpleName} — 5 san. sonra yenidən",
                     connected = false
                 )

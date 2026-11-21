@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.VerticalSplit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -304,7 +303,7 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
     }
 
     homeChoices?.let { list ->
-        AlertDialog(
+        ScaledAlertDialog(
             onDismissRequest = { homeChoices = null },
             title = { Text("Hansı əsas ekrana qayıdaq?") },
             text = {

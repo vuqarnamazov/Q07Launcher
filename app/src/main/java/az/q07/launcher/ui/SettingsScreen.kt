@@ -94,10 +94,7 @@ private enum class Section(val title: String, val icon: ImageVector) {
 fun SettingsScreen(onClose: () -> Unit) {
     var section by remember { mutableStateOf(Section.Look) }
 
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    ScaledDialog(onDismissRequest = onClose) {
         Row(
             Modifier
                 .fillMaxSize()

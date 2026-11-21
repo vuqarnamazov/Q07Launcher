@@ -24,13 +24,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +73,19 @@ fun NetworkStatusBar(modifier: Modifier = Modifier) {
     }
 
     val dm = DualNetworkManager
+    val obdData by az.q07.launcher.data.ObdMonitor.state.collectAsState()
+    // Wi-Fi qoşulub, amma məlumat gəlmirsə — bunu açıq göstər
+    val obdText = when {
+        !dm.obdConnected -> dm.obdStatus
+        obdData.values.isNotEmpty() -> "Wi-Fi ✓ · ${obdData.values.size} göstərici"
+        obdData.status.startsWith("Xəta") -> "Wi-Fi ✓ · " + obdData.status.removePrefix("Xəta: ").substringBefore(" — 5")
+        else -> "Wi-Fi ✓ · ${obdData.status}"
+    }
+    val obdColor = when {
+        !dm.obdConnected -> CarColors.Danger
+        obdData.values.isNotEmpty() -> CarColors.Green
+        else -> CarColors.Warning
+    }
     val phoneColor = when {
         dm.phoneInternet -> CarColors.Green
         dm.phoneConnected -> CarColors.Warning
@@ -105,8 +118,8 @@ fun NetworkStatusBar(modifier: Modifier = Modifier) {
             StatusChip(
                 icon = Icons.Filled.DirectionsCar,
                 title = "OBD",
-                status = dm.obdStatus,
-                color = if (dm.obdConnected) CarColors.Green else CarColors.Danger,
+                status = obdText,
+                color = obdColor,
                 action = if (dm.obdConnected) "Ayır" else "Qoş",
                 modifier = chipMod,
                 onLongClick = { setupOpen = true },
@@ -160,7 +173,7 @@ private fun StatusChip(
             Text(title, fontSize = 13.sp, color = CarColors.TextSecondary, maxLines = 1)
             Text(
                 status, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = CarColors.TextPrimary,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         }
         if (action != null) {
@@ -231,7 +244,7 @@ fun NetworkSetupForm(onSaved: (() -> Unit)? = null) {
 
 @Composable
 private fun NetworkSetupDialog(onDismiss: () -> Unit) {
-    AlertDialog(
+    ScaledAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Şəbəkə: Telefon + OBD") },
         text = {

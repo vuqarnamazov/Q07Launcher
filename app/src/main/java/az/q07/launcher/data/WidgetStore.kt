@@ -2,11 +2,15 @@ package az.q07.launcher.data
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
 import android.view.View
 import android.widget.FrameLayout
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 data class HostedWidget(val id: Int, val heightDp: Int)
 
@@ -41,6 +45,7 @@ object WidgetStore {
             if (manager.getAppWidgetInfo(wid) != null) widgets.add(HostedWidget(wid, h.toIntOrNull() ?: 200))
         }
         save()
+        ensureCarWidgets()
     }
 
     fun add(id: Int) {
@@ -71,6 +76,63 @@ object WidgetStore {
         val w = widgets.removeAt(i)
         widgets.add(j, w)
         save()
+    }
+
+    // ---------- Maşın kartına avtomatik qoyulan zavod vidcetləri ----------
+
+    /** Q07 zavod vidcetləri: Enerji (batareya/yanacaq/məsafə) və Avtomobil məlumatı */
+    val AUTO_CAR = listOf(
+        ComponentName("com.incall.apps.energy", "com.incall.apps.energy_view.widget.SDA_Widget_EnergyProvider"),
+        ComponentName("com.incall.apps.vehiclesetting", "com.incall.apps.vehiclesetting.widget.SDA_Widget_VehicleInfoProvider")
+    )
+
+    /** Maşın kartındakı vidcet id-ləri (sıra ilə) */
+    val carWidgets = mutableStateListOf<Int>()
+
+    /** Sistem icazəsi lazım olan (hələ bağlanmamış) provayderlər */
+    var carBindNeeded by mutableStateOf<List<ComponentName>>(emptyList())
+
+    /** İstifadəçi maşın kartında vidcetləri söndürübsə */
+    var carWidgetsEnabled: Boolean
+        get() = prefs.getBoolean("car_enabled", true)
+        set(v) { prefs.edit().putBoolean("car_enabled", v).apply(); ensureCarWidgets() }
+
+    /** Enerji/Avtomobil vidcetlərini yoxla, yoxdursa yarat (icazə varsa səssiz) */
+    fun ensureCarWidgets() {
+        if (!::prefs.isInitialized) return
+        carWidgets.clear()
+        if (!carWidgetsEnabled) { carBindNeeded = emptyList(); return }
+        val installed = runCatching { manager.installedProviders.map { it.provider }.toSet() }.getOrDefault(emptySet())
+        val need = mutableListOf<ComponentName>()
+        for (cmp in AUTO_CAR) {
+            if (cmp !in installed) continue
+            val key = "car_" + cmp.flattenToShortString()
+            var id = prefs.getInt(key, -1)
+            if (id != -1 && manager.getAppWidgetInfo(id)?.provider != cmp) {
+                runCatching { host.deleteAppWidgetId(id) }
+                id = -1
+            }
+            if (id == -1) {
+                val newId = host.allocateAppWidgetId()
+                val ok = runCatching { manager.bindAppWidgetIdIfAllowed(newId, cmp) }.getOrDefault(false)
+                if (ok) {
+                    id = newId
+                    prefs.edit().putInt(key, id).apply()
+                } else {
+                    host.deleteAppWidgetId(newId)
+                    need += cmp
+                }
+            }
+            if (id != -1) carWidgets.add(id)
+        }
+        carBindNeeded = need
+    }
+
+    /** Sistem icazə pəncərəsindən sonra */
+    fun onCarBound(cmp: ComponentName, id: Int, ok: Boolean) {
+        if (ok) prefs.edit().putInt("car_" + cmp.flattenToShortString(), id).apply()
+        else runCatching { host.deleteAppWidgetId(id) }
+        ensureCarWidgets()
     }
 
     private fun save() {

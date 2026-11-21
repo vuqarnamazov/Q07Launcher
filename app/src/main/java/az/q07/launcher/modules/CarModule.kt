@@ -1,6 +1,18 @@
 package az.q07.launcher.modules
 
+import android.app.Activity
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import az.q07.launcher.data.WidgetStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,19 +105,59 @@ object CarModule : LauncherModule {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(mainKeys, secondKeys).forEach { keys ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    keys.forEach { key ->
-                        val pid = ObdPids.all.first { it.key == key }
-                        Tile(pid, obd.values[key], Modifier.weight(1f))
-                    }
-                }
-            }
+            CarFactoryWidgets()
+            TileGrid(ObdPids.all.filter { it.key in mainKeys + secondKeys }
+                .sortedBy { (mainKeys + secondKeys).indexOf(it.key) }, obd.values)
             Text(
                 "OBD: ${obd.status}",
                 fontSize = 13.sp,
-                color = if (obd.connected) CarColors.Green else CarColors.TextSecondary
+                color = if (obd.connected) CarColors.Green else CarColors.Warning
             )
+            if (obd.detail.isNotBlank() && (obd.values.isEmpty() || !obd.connected)) {
+                Text(obd.detail, fontSize = 11.sp, color = CarColors.TextSecondary, maxLines = 3)
+            }
+        }
+    }
+
+    /** Eni nə olursa olsun kəsilməyən kafel şəbəkəsi: sütun sayı enə görə 2–4 */
+    @Composable
+    private fun TileGrid(pids: List<ObdPid>, values: Map<String, Double>) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val cols = (maxWidth / 112.dp).toInt().coerceIn(2, 4)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                pids.chunked(cols).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { pid -> Tile(pid, values[pid.key], Modifier.weight(1f)) }
+                        repeat(cols - row.size) { Column(Modifier.weight(1f)) {} }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Zavodun Enerji və Avtomobil məlumatı vidcetləri — avtomatik qoyulur */
+    @Composable
+    private fun CarFactoryWidgets() {
+        if (!WidgetStore.carWidgetsEnabled) return
+        var pending by remember { mutableStateOf<Pair<ComponentName, Int>?>(null) }
+        val bind = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+            pending?.let { (cmp, id) -> WidgetStore.onCarBound(cmp, id, res.resultCode == Activity.RESULT_OK) }
+            pending = null
+        }
+        WidgetStore.carWidgets.forEach { id -> FittedWidget(id) }
+        WidgetStore.carBindNeeded.forEach { cmp ->
+            val label = if ("energy" in cmp.packageName) "Enerji vidceti" else "Avtomobil məlumatı vidceti"
+            OutlinedButton(onClick = {
+                val id = WidgetStore.host.allocateAppWidgetId()
+                pending = cmp to id
+                runCatching {
+                    bind.launch(
+                        Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, cmp)
+                    )
+                }.onFailure { WidgetStore.onCarBound(cmp, id, false); pending = null }
+            }) { Text("+ $label") }
         }
     }
 
@@ -120,12 +172,7 @@ object CarModule : LauncherModule {
                 val pids = ObdPids.all.filter { it.group == g && it.key !in shown && it.key !in obd.unsupported }
                 if (pids.isEmpty()) return@forEach
                 Text(g, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
-                pids.chunked(4).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { pid -> Tile(pid, obd.values[pid.key], Modifier.weight(1f)) }
-                        repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
-                    }
-                }
+                TileGrid(pids, obd.values)
             }
             val info = listOfNotNull(
                 obd.vin?.let { "VIN: $it" },

@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -138,7 +137,7 @@ private fun AppActionsDialog(app: AppEntry, onDismiss: () -> Unit) {
     var newName by remember { mutableStateOf(LauncherPrefs.displayLabel(app.key, app.label)) }
     val hidden = LauncherPrefs.isHidden(app.key)
 
-    AlertDialog(
+    ScaledAlertDialog(
         onDismissRequest = onDismiss,
         icon = { Image(app.icon, null, Modifier.size(56.dp)) },
         title = { Text(LauncherPrefs.displayLabel(app.key, app.label)) },

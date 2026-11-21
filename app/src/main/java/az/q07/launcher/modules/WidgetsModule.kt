@@ -1,5 +1,6 @@
 package az.q07.launcher.modules
 
+import az.q07.launcher.ui.ScaledAlertDialog
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -9,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +26,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -142,28 +143,7 @@ object WidgetsModule : LauncherModule {
     }
 
     @Composable
-    private fun HostedWidgetView(w: HostedWidget) {
-        val context = LocalContext.current
-        val info = remember(w.id) { WidgetStore.manager.getAppWidgetInfo(w.id) } ?: return
-        // Launcher UI-nin miqyası (2.5K ekranda ≈ 2.0)
-        val scale = LocalDensity.current.density / context.resources.displayMetrics.density
-
-        AndroidView(
-            factory = { ctx ->
-                ScaledFrame(ctx).apply {
-                    this.scale = scale
-                    val hv = WidgetStore.host.createView(ctx.applicationContext, w.id, info)
-                    hv.setAppWidget(w.id, info)
-                    addView(hv)
-                }
-            },
-            update = { it.scale = scale },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(w.heightDp.dp)
-                .clip(RoundedCornerShape(16.dp))
-        )
-    }
+    private fun HostedWidgetView(w: HostedWidget) = FittedWidget(w.id, heightUnits = w.heightDp)
 
     @Composable
     private fun ProviderPicker(onDismiss: () -> Unit, onPick: (AppWidgetProviderInfo) -> Unit) {
@@ -174,7 +154,7 @@ object WidgetsModule : LauncherModule {
                 .map { it to (it.loadLabel(pm) ?: it.provider.className) }
                 .sortedBy { it.first.provider.packageName + it.second }
         }
-        AlertDialog(
+        ScaledAlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Vidcet seç (${providers.size})") },
             text = {
@@ -248,5 +228,42 @@ object WidgetsModule : LauncherModule {
             )
             Text(ADB_GRANT, fontSize = 13.sp, color = CarColors.Warning)
         }
+    }
+}
+
+/**
+ * Zavod vidcetini mövcud enə SIĞDIRAN göstərici.
+ * Miqyas = min(launcher miqyası, en / vidcetin minimal eni) — ekran/miqyas nə olursa olsun,
+ * vidcetin bütün hissələri görünür (kəsilmir), hündürlük də mütənasib dəyişir.
+ * heightUnits — vidcetin öz vahidlərində hündürlük (null → provayderin minHeight-i).
+ */
+@Composable
+fun FittedWidget(id: Int, heightUnits: Int? = null, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val info = remember(id) { WidgetStore.manager.getAppWidgetInfo(id) } ?: return
+    val launcherScale = LocalDensity.current.density / context.resources.displayMetrics.density
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val availPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val sysDensity = context.resources.displayMetrics.density
+        val minW = info.minWidth.toFloat().takeIf { it > 0 } ?: (availPx / launcherScale)
+        val scale = minOf(launcherScale, availPx / minW).coerceAtLeast(0.3f)
+        val units = (heightUnits?.toFloat() ?: (info.minHeight / sysDensity)).coerceAtLeast(60f)
+        // vahid (sistem dp) → ekran px → launcher dp
+        val heightLauncherDp = (units * sysDensity * scale) / LocalDensity.current.density
+        AndroidView(
+            factory = { ctx ->
+                ScaledFrame(ctx).apply {
+                    this.scale = scale
+                    val hv = WidgetStore.host.createView(ctx.applicationContext, id, info)
+                    hv.setAppWidget(id, info)
+                    addView(hv)
+                }
+            },
+            update = { it.scale = scale },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(heightLauncherDp.dp)
+                .clip(RoundedCornerShape(16.dp))
+        )
     }
 }
