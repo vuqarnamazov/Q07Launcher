@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.NotesStore
 import az.q07.launcher.data.ReminderScheduler
+import az.q07.launcher.data.WidgetStore
 import az.q07.launcher.ui.LauncherScreen
 import az.q07.launcher.ui.theme.CarLauncherTheme
 
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
         NotesStore.init(applicationContext)
         LauncherPrefs.init(applicationContext)
+        WidgetStore.init(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
@@ -59,6 +61,16 @@ class MainActivity : ComponentActivity() {
                 LauncherScreen(appsVersion = appsVersion)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runCatching { WidgetStore.host.startListening() }
+    }
+
+    override fun onStop() {
+        runCatching { WidgetStore.host.stopListening() }
+        super.onStop()
     }
 
     override fun onDestroy() {

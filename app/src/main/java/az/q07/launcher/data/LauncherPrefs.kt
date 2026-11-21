@@ -25,24 +25,25 @@ object LauncherPrefs {
     private val defaultCandidates: List<List<String>> = listOf(
         // 1) Naviqasiya
         listOf(
-            "com.waze", "ru.yandex.yandexnavi", "ru.yandex.yandexmaps",
+            "com.waze", "com.incall.apps.navi", "ru.yandex.yandexnavi", "ru.yandex.yandexmaps",
             "com.autonavi.amapauto", "com.autonavi.minimap", "com.baidu.BaiduMap",
             "com.google.android.apps.maps", "net.osmand", "net.osmand.plus"
         ),
         // 2) Musiqi
         listOf(
-            "ru.yandex.music", "com.spotify.music", "com.google.android.apps.youtube.music",
+            "ru.yandex.music", "com.incall.apps.sdamedia.onlinemusic", "com.netease.cloudmusic.iot",
+            "com.spotify.music", "com.google.android.apps.youtube.music",
             "com.tencent.qqmusic", "com.netease.cloudmusic", "com.kugou.android"
         ),
         // 3) Video (Google-suz işləyənlər öndə)
         listOf(
-            "com.liskovsoft.smarttubetv.beta", "com.liskovsoft.smarttubetv",
+            "app.morphe.android.youtube", "ru.kinopoisk", "com.liskovsoft.smarttubetv.beta", "com.liskovsoft.smarttubetv",
             "org.schabi.newpipe", "app.revanced.android.youtube",
             "com.google.android.youtube", "com.qiyi.video", "tv.danmaku.bili"
         ),
         // 4) Brauzer / AI
         listOf(
-            "com.google.android.apps.bard", "com.deepseek.chat", "org.mozilla.firefox",
+            "com.brave.browser", "com.google.android.apps.bard", "com.deepseek.chat", "org.mozilla.firefox",
             "com.android.chrome", "com.yandex.browser", "com.android.browser", "mark.via.gp"
         )
     )
@@ -59,6 +60,14 @@ object LauncherPrefs {
         } else {
             val parts = saved.split("|")
             repeat(DOCK_SLOTS) { i -> dockSlots.add(parts.getOrElse(i) { "" }) }
+        }
+        // Yeni standartlar (v2: Q07-də quraşdırılmış tətbiqlər) — yalnız boş slotlara, bir dəfə
+        if (prefs.getInt("defaults_v", 1) < 2) {
+            defaultCandidates.forEachIndexed { i, list ->
+                if (dockSlots[i].isEmpty()) dockSlots[i] = resolveFirstInstalled(context, list)
+            }
+            saveDock()
+            prefs.edit().putInt("defaults_v", 2).apply()
         }
 
         hidden.clear()
