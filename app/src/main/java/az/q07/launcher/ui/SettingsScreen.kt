@@ -115,22 +115,12 @@ fun SettingsScreen(onClose: () -> Unit) {
                     IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Bağla", tint = CarColors.TextPrimary) }
                 }
                 Spacer(Modifier.height(8.dp))
-                Section.entries.forEach { s ->
-                    val sel = s == section
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (sel) CarColors.PanelAlt else CarColors.Panel)
-                            .clickable { section = s }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(s.icon, null, tint = if (sel) CarColors.Accent else CarColors.TextSecondary)
-                        Spacer(Modifier.width(12.dp))
-                        Text(s.title, fontSize = 18.sp, color = CarColors.TextPrimary)
-                    }
-                }
+                GlowingFlowNavigationColumn(
+                    items = Section.entries.map { CarMenuItem(title = it.title, icon = it.icon) },
+                    selectedIndex = section.ordinal,
+                    onItemSelected = { section = Section.entries[it] },
+                    itemHeight = 58.dp
+                )
             }
             // Məzmun
             Column(

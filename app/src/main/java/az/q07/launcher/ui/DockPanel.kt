@@ -27,7 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,7 +57,6 @@ import java.util.Date
 import java.util.Locale
 
 private val slotNames = listOf("Naviqasiya", "Musiqi", "Video", "Brauzer / AI")
-private val slotColors = listOf(CarColors.Green, CarColors.Accent, CarColors.YouTube, CarColors.Purple)
 
 @Composable
 fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modifier) {
@@ -74,22 +75,23 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
         }
     }
 
-    @Composable
-    fun Slots(itemModifier: (Int) -> Modifier) {
-        repeat(LauncherPrefs.DOCK_SLOTS) { i ->
-            val app = byKey[LauncherPrefs.dockSlots.getOrElse(i) { "" }]
-            DockButton(
-                label = app?.let { LauncherPrefs.displayLabel(it.key, it.label) } ?: slotNames[i],
-                subtitle = if (app == null) "Toxun və təyin et" else null,
-                bitmap = app?.icon,
-                vector = if (app == null) Icons.Filled.Add else null,
-                tint = slotColors[i],
-                modifier = itemModifier(i),
-                onLongClick = { pickingSlot = i },
-                onClick = { if (app != null) AppRepository.launch(context, app) else pickingSlot = i }
-            )
-        }
+    // Neon "axıcı işıq" menyusu üçün seçilmiş slot (toxunan kimi aktiv olur və seçili qalır)
+    var selectedSlot by rememberSaveable { mutableIntStateOf(0) }
+    val slotApps = List(LauncherPrefs.DOCK_SLOTS) { i -> byKey[LauncherPrefs.dockSlots.getOrElse(i) { "" }] }
+    val slotItems = slotApps.mapIndexed { i, app ->
+        CarMenuItem(
+            title = app?.let { LauncherPrefs.displayLabel(it.key, it.label) } ?: slotNames[i],
+            icon = if (app == null) Icons.Filled.Add else null,
+            bitmap = app?.icon,
+            subtitle = if (app == null) "Toxun və təyin et" else null
+        )
     }
+    val onSlotSelected: (Int) -> Unit = { i ->
+        selectedSlot = i
+        val app = slotApps[i]
+        if (app != null) AppRepository.launch(context, app) else pickingSlot = i
+    }
+    val onSlotLongClick: (Int) -> Unit = { i -> pickingSlot = i }
 
     PanelSurface(modifier) {
         if (vertical) {
@@ -99,7 +101,13 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
             ) {
                 ClockBlock(big = true)
                 Spacer(Modifier.height(4.dp))
-                Slots { Modifier.fillMaxWidth().height(68.dp) }
+                GlowingFlowNavigationColumn(
+                    items = slotItems,
+                    selectedIndex = selectedSlot,
+                    onItemSelected = onSlotSelected,
+                    onItemLongClick = onSlotLongClick,
+                    itemHeight = 68.dp
+                )
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DockButton(
@@ -124,7 +132,13 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ClockBlock(big = false)
-                Slots { Modifier.weight(1f).fillMaxHeight() }
+                GlowingFlowNavigationBar(
+                    items = slotItems,
+                    selectedIndex = selectedSlot,
+                    onItemSelected = onSlotSelected,
+                    onItemLongClick = onSlotLongClick,
+                    modifier = Modifier.weight(4f)
+                )
                 DockButton(
                     label = "Ayarlar", subtitle = null, bitmap = null,
                     vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
