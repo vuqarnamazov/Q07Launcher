@@ -56,7 +56,7 @@ fun ModulesPanel(modifier: Modifier = Modifier) {
                     color = CarColors.TextPrimary
                 )
             }
-            items(ModuleRegistry.modules, key = { it.id }) { module ->
+            items(ModuleRegistry.visible(), key = { it.id }) { module ->
                 ModuleCard(module)
             }
         }

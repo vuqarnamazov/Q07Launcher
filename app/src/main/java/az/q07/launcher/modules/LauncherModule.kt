@@ -28,11 +28,23 @@ interface LauncherModule {
 
 object ModuleRegistry {
     val modules: List<LauncherModule> = listOf(
+        CarModule,
         MediaModule,
+        WeatherModule,
+        TripModule,
         WidgetsModule,
         VoiceNoteModule,
         NetworkModule,
         SystemInfoModule,
         // MyModule,  ← yeni modulları bura əlavə et
     )
+
+    /** Ayarlardakı sıraya görə, söndürülənlər çıxılmaqla */
+    fun allOrdered(): List<LauncherModule> {
+        val order = az.q07.launcher.data.AppSettings.moduleOrder
+        return modules.sortedBy { m -> order.indexOf(m.id).let { if (it < 0) 1000 + modules.indexOf(m) else it } }
+    }
+
+    fun visible(): List<LauncherModule> =
+        allOrdered().filter { it.id !in az.q07.launcher.data.AppSettings.disabledModules }
 }

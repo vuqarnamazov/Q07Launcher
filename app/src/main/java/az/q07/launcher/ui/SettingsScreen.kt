@@ -1,0 +1,425 @@
+package az.q07.launcher.ui
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.NotificationManagerCompat
+import az.q07.launcher.BuildConfig
+import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.LauncherPrefs
+import az.q07.launcher.data.ObdMonitor
+import az.q07.launcher.data.QuickActions
+import az.q07.launcher.modules.ModuleRegistry
+import az.q07.launcher.ui.theme.CarColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+private enum class Section(val title: String, val icon: ImageVector) {
+    Look("Görünüş", Icons.Filled.Palette),
+    Modules("Modullar", Icons.Filled.ViewModule),
+    Car("Maşın / OBD", Icons.Filled.DirectionsCar),
+    Weather("Hava", Icons.Filled.WbSunny),
+    Perms("İcazələr", Icons.Filled.Security),
+    About("Haqqında / Yeniləmə", Icons.Filled.Info)
+}
+
+@Composable
+fun SettingsScreen(onClose: () -> Unit) {
+    var section by remember { mutableStateOf(Section.Look) }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(CarColors.Background)
+                .border(1.dp, CarColors.Border, RoundedCornerShape(24.dp))
+        ) {
+            // Sol menyu
+            Column(
+                Modifier
+                    .width(280.dp)
+                    .fillMaxHeight()
+                    .background(CarColors.Panel)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Ayarlar", fontSize = 26.sp, fontWeight = FontWeight.SemiBold,
+                        color = CarColors.TextPrimary, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "Bağla", tint = CarColors.TextPrimary) }
+                }
+                Spacer(Modifier.height(8.dp))
+                Section.entries.forEach { s ->
+                    val sel = s == section
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (sel) CarColors.PanelAlt else CarColors.Panel)
+                            .clickable { section = s }
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(s.icon, null, tint = if (sel) CarColors.Accent else CarColors.TextSecondary)
+                        Spacer(Modifier.width(12.dp))
+                        Text(s.title, fontSize = 18.sp, color = CarColors.TextPrimary)
+                    }
+                }
+            }
+            // Məzmun
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Text(section.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
+                when (section) {
+                    Section.Look -> LookSection()
+                    Section.Modules -> ModulesSection()
+                    Section.Car -> CarSection()
+                    Section.Weather -> WeatherSection()
+                    Section.Perms -> PermsSection()
+                    Section.About -> AboutSection()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Label(text: String, hint: String? = null) {
+    Column {
+        Text(text, fontSize = 18.sp, color = CarColors.TextPrimary)
+        if (hint != null) Text(hint, fontSize = 14.sp, color = CarColors.TextSecondary)
+    }
+}
+
+@Composable
+private fun Chips(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEachIndexed { i, o ->
+            val sel = i == selected
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (sel) CarColors.Accent else CarColors.PanelAlt)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(o, fontSize = 16.sp, color = if (sel) androidx.compose.ui.graphics.Color.Black else CarColors.TextPrimary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(text: String, hint: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { Label(text, hint) }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun LookSection() {
+    Label("Vurğu rəngi")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        AppSettings.accents.forEachIndexed { i, (name, color) ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(
+                            if (i == AppSettings.accentIndex) 4.dp else 0.dp,
+                            CarColors.TextPrimary, CircleShape
+                        )
+                        .clickable { AppSettings.update { accentIndex = i } }
+                )
+                Text(name, fontSize = 13.sp, color = CarColors.TextSecondary)
+            }
+        }
+    }
+    SwitchRow("Saatda saniyələr", null, AppSettings.showSeconds) { v -> AppSettings.update { showSeconds = v } }
+
+    Label("İnterfeys ölçüsü", "Avtomatik miqyas 2560×1600 ekran üçün; buradan bir az böyüt/kiçilt")
+    val scales = listOf(85, 90, 100, 110, 120)
+    Chips(scales.map { "$it%" }, scales.indexOf(AppSettings.uiScalePercent)) { i ->
+        AppSettings.update { uiScalePercent = scales[i] }
+    }
+
+    Label("Tətbiq şəbəkəsi — sütun sayı")
+    val cols = listOf(3, 4, 5, 6)
+    Chips(cols.map { "$it" }, cols.indexOf(AppSettings.gridColumns)) { i ->
+        AppSettings.update { gridColumns = cols[i] }
+    }
+}
+
+@Composable
+private fun ModulesSection() {
+    Label("Orta paneldəki kartlar", "Açıb-söndür və ▲▼ ilə sıranı dəyiş")
+    val list = ModuleRegistry.allOrdered()
+    list.forEachIndexed { index, m ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(CarColors.Panel)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(m.icon, null, tint = m.accent)
+            Spacer(Modifier.width(12.dp))
+            Text(m.title, fontSize = 17.sp, color = CarColors.TextPrimary, modifier = Modifier.weight(1f))
+            IconButton(onClick = { move(list.map { it.id }, index, -1) }, enabled = index > 0) {
+                Icon(Icons.Filled.KeyboardArrowUp, "Yuxarı")
+            }
+            IconButton(onClick = { move(list.map { it.id }, index, 1) }, enabled = index < list.lastIndex) {
+                Icon(Icons.Filled.KeyboardArrowDown, "Aşağı")
+            }
+            Switch(
+                checked = m.id !in AppSettings.disabledModules,
+                onCheckedChange = { on ->
+                    AppSettings.update {
+                        if (on) disabledModules.remove(m.id) else if (m.id !in disabledModules) disabledModules.add(m.id)
+                    }
+                }
+            )
+        }
+    }
+    OutlinedButton(onClick = {
+        AppSettings.update { moduleOrder.clear(); disabledModules.clear() }
+    }) { Text("Standart sıraya qaytar") }
+
+    Label("Dock", "Dock slotlarını sıfırla — maşındakı tətbiqlərdən yenidən seçilir")
+    val context = LocalContext.current
+    OutlinedButton(onClick = {
+        repeat(LauncherPrefs.DOCK_SLOTS) { LauncherPrefs.setDockSlot(it, null) }
+        QuickActions.toast(context, "Slotlar boşaldıldı — uzun basıb tətbiq seç")
+    }) { Text("Dock slotlarını boşalt") }
+}
+
+private fun move(ids: List<String>, index: Int, delta: Int) {
+    val m = ids.toMutableList()
+    val j = index + delta
+    if (j !in m.indices) return
+    val x = m.removeAt(index)
+    m.add(j, x)
+    AppSettings.update { moduleOrder.clear(); moduleOrder.addAll(m) }
+}
+
+@SuppressLint("MissingPermission")
+@Composable
+private fun CarSection() {
+    Label("OBD adapteri (ELM327)", "Q07-OBD tətbiqindəki kimi: temperaturlar, hibrid batareya, gərginlik, sürət")
+    val modes = listOf("off" to "Söndürülüb", "wifi" to "Wi-Fi", "bt" to "Bluetooth")
+    Chips(modes.map { it.second }, modes.indexOfFirst { it.first == AppSettings.obdMode }) { i ->
+        AppSettings.update { obdMode = modes[i].first }
+        ObdMonitor.restart()
+    }
+
+    when (AppSettings.obdMode) {
+        "wifi" -> {
+            var host by remember { mutableStateOf(AppSettings.obdHost) }
+            var port by remember { mutableStateOf(AppSettings.obdPort.toString()) }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(host, { host = it }, label = { Text("IP ünvanı") }, singleLine = true,
+                    modifier = Modifier.weight(2f))
+                OutlinedTextField(port, { port = it.filter(Char::isDigit) }, label = { Text("Port") },
+                    singleLine = true, modifier = Modifier.weight(1f))
+            }
+            OutlinedButton(onClick = {
+                AppSettings.update {
+                    obdHost = host.trim()
+                    obdPort = port.toIntOrNull() ?: 35000
+                }
+                ObdMonitor.restart()
+            }) { Text("Yadda saxla və qoşul") }
+            Text(
+                "Head unit-i adapterin Wi-Fi şəbəkəsinə qoş (adətən «WiFi_OBDII»). İnternet SIM ilə qalır.",
+                fontSize = 14.sp, color = CarColors.TextSecondary
+            )
+        }
+        "bt" -> {
+            val devices = remember {
+                runCatching { BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.toList() }.getOrNull().orEmpty()
+            }
+            Text(
+                if (AppSettings.obdBtName.isNotBlank()) "Seçilib: ${AppSettings.obdBtName}" else "Adapter seçilməyib",
+                fontSize = 16.sp, color = CarColors.TextPrimary
+            )
+            if (devices.isEmpty()) {
+                Text("Qoşulmuş (pair) cihaz yoxdur — əvvəlcə maşının Bluetooth ayarlarında adapteri qoş (PIN adətən 1234).",
+                    fontSize = 14.sp, color = CarColors.TextSecondary)
+            }
+            devices.forEach { d ->
+                val name = runCatching { d.name }.getOrNull() ?: d.address
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (d.address == AppSettings.obdBtMac) CarColors.PanelAlt else CarColors.Panel)
+                        .clickable {
+                            AppSettings.update { obdBtMac = d.address; obdBtName = name }
+                            ObdMonitor.restart()
+                        }
+                        .padding(14.dp)
+                ) {
+                    Text(name, fontSize = 17.sp, color = CarColors.TextPrimary, modifier = Modifier.weight(1f))
+                    Text(d.address, fontSize = 14.sp, color = CarColors.TextSecondary)
+                }
+            }
+        }
+    }
+
+    Label("Yenilənmə intervalı")
+    val intervals = listOf(1000, 1500, 3000, 5000)
+    Chips(intervals.map { "${it / 1000.0} san" }, intervals.indexOf(AppSettings.obdIntervalMs)) { i ->
+        AppSettings.update { obdIntervalMs = intervals[i] }
+    }
+}
+
+@Composable
+private fun WeatherSection() {
+    Label("Şəhər", "Hava kartı bu şəhərin proqnozunu göstərir (Open-Meteo, internet lazımdır)")
+    AppSettings.cities.chunked(5).forEach { row ->
+        Chips(row.map { it.name }, row.indexOf(AppSettings.city)) { i ->
+            AppSettings.update { cityIndex = AppSettings.cities.indexOf(row[i]) }
+        }
+    }
+}
+
+@Composable
+private fun PermsSection() {
+    val context = LocalContext.current
+    val mediaOk = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+    Label("Media («İndi çalır»)", if (mediaOk) "✓ İcazə var" else "✗ İcazə yoxdur")
+    Label("Kompüterdən bir dəfəlik ADB əmrləri:")
+    listOf(
+        "adb shell cmd notification allow_listener az.q07.launcher/az.q07.launcher.media.MediaListenerService",
+        "adb shell appwidget grantbind --package az.q07.launcher --user 0",
+        "adb shell pm grant az.q07.launcher android.permission.RECORD_AUDIO",
+        "adb shell pm grant az.q07.launcher android.permission.ACCESS_FINE_LOCATION",
+        "adb shell pm grant az.q07.launcher android.car.permission.CAR_SPEED"
+    ).forEach { Text(it, fontSize = 14.sp, color = CarColors.Warning) }
+    OutlinedButton(onClick = {
+        QuickActions.start(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+    }) { Text("Tətbiq icazələrini aç") }
+    OutlinedButton(onClick = { QuickActions.openHomeSettings(context) }) { Text("Defolt əsas ekran ayarı") }
+}
+
+private data class UpdateInfo(val latest: Int, val url: String?, val error: String?)
+
+@Composable
+private fun AboutSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    Label("Q07 Launcher ${BuildConfig.VERSION_NAME}", "Build #${BuildConfig.CI_BUILD} · Changan Qiyuan Q07 · 2560×1600")
+    OutlinedButton(enabled = !checking, onClick = {
+        checking = true
+        scope.launch {
+            info = withContext(Dispatchers.IO) {
+                try {
+                    val c = URL("https://api.github.com/repos/vuqarnamazov/q07launcher/releases/latest")
+                        .openConnection() as HttpURLConnection
+                    c.connectTimeout = 8000; c.readTimeout = 8000
+                    val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                    val n = o.getString("tag_name").substringAfter("build-").toIntOrNull() ?: 0
+                    val assets = o.getJSONArray("assets")
+                    val url = if (assets.length() > 0) assets.getJSONObject(0).getString("browser_download_url") else null
+                    UpdateInfo(n, url, null)
+                } catch (e: Exception) {
+                    UpdateInfo(0, null, "Yoxlamaq alınmadı: internet yoxdur")
+                }
+            }
+            checking = false
+        }
+    }) { Text(if (checking) "Yoxlanılır…" else "Yeniləməni yoxla") }
+
+    info?.let { u ->
+        when {
+            u.error != null -> Text(u.error, fontSize = 15.sp, color = CarColors.Danger)
+            u.latest > BuildConfig.CI_BUILD && u.url != null -> {
+                Text("Yeni versiya var: build #${u.latest}", fontSize = 16.sp, color = CarColors.Green)
+                OutlinedButton(onClick = {
+                    QuickActions.start(context, Intent(Intent.ACTION_VIEW, Uri.parse(u.url)))
+                }) { Text("Yüklə (brauzerdə açılır)") }
+            }
+            else -> Text("Ən son versiyadır ✓", fontSize = 16.sp, color = CarColors.Green)
+        }
+    }
+
+    val dm = context.resources.displayMetrics
+    Label("Ekran", "${dm.widthPixels}×${dm.heightPixels} px · ${dm.densityDpi} dpi")
+    Label("Mənbə kodu", "github.com/vuqarnamazov/Q07Launcher")
+}

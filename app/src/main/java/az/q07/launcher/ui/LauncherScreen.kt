@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import az.q07.launcher.data.AppEntry
 import az.q07.launcher.data.AppRepository
+import az.q07.launcher.data.AppSettings
 import az.q07.launcher.ui.theme.CarColors
 
 /**
@@ -48,7 +49,7 @@ fun LauncherScreen(appsVersion: Int) {
     ) {
         val landscape = maxWidth >= maxHeight
         val longSide = if (landscape) maxWidth.value else maxHeight.value
-        val scale = (longSide / DESIGN_LONG_SIDE_DP).coerceIn(0.75f, 2.0f)
+        val scale = (longSide / DESIGN_LONG_SIDE_DP).coerceIn(0.75f, 2.0f) * AppSettings.uiScalePercent / 100f
         val base = LocalDensity.current
 
         CompositionLocalProvider(
@@ -61,7 +62,7 @@ fun LauncherScreen(appsVersion: Int) {
                 ) {
                     DockPanel(apps.orEmpty(), vertical = true, Modifier.weight(0.22f).fillMaxHeight())
                     ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
-                    AppsPanel(apps, columns = 4, Modifier.weight(0.42f).fillMaxHeight())
+                    AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
                 }
             } else {
                 // Ekran şaquli fırladılanda
@@ -71,7 +72,7 @@ fun LauncherScreen(appsVersion: Int) {
                 ) {
                     DockPanel(apps.orEmpty(), vertical = false, Modifier.fillMaxWidth().weight(0.18f))
                     ModulesPanel(Modifier.fillMaxWidth().weight(0.37f))
-                    AppsPanel(apps, columns = 5, Modifier.fillMaxWidth().weight(0.45f))
+                    AppsPanel(apps, columns = AppSettings.gridColumns + 1, Modifier.fillMaxWidth().weight(0.45f))
                 }
             }
         }

@@ -6,14 +6,17 @@ plugins {
 
 android {
     namespace = "az.q07.launcher"
+    useLibrary("android.car")
     compileSdk = 34
 
     defaultConfig {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
+        // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
+        buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
     buildTypes {
@@ -31,6 +34,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         abortOnError = false

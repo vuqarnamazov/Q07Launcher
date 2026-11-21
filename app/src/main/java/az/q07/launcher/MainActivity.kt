@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import az.q07.launcher.data.AppSettings
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.NotesStore
 import az.q07.launcher.data.ReminderScheduler
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        AppSettings.init(applicationContext)
         NotesStore.init(applicationContext)
         LauncherPrefs.init(applicationContext)
         WidgetStore.init(applicationContext)

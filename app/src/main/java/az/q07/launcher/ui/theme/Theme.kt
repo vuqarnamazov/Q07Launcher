@@ -10,7 +10,8 @@ object CarColors {
     val Panel = Color(0xFF141922)
     val PanelAlt = Color(0xFF1C2330)
     val Border = Color(0xFF263042)
-    val Accent = Color(0xFF3DA9FC)
+    /** Ayarlarda seçilən vurğu rəngi */
+    val Accent: Color get() = az.q07.launcher.data.AppSettings.accentColor
     val Green = Color(0xFF00D1A0)
     val Warning = Color(0xFFFFB020)
     val Danger = Color(0xFFFF5A5F)
@@ -20,7 +21,7 @@ object CarColors {
     val TextSecondary = Color(0xFF8A94A6)
 }
 
-private val CarDarkScheme = darkColorScheme(
+private fun carDarkScheme() = darkColorScheme(
     primary = CarColors.Accent,
     secondary = CarColors.Green,
     background = CarColors.Background,
@@ -35,5 +36,5 @@ private val CarDarkScheme = darkColorScheme(
 
 @Composable
 fun CarLauncherTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = CarDarkScheme, content = content)
+    MaterialTheme(colorScheme = carDarkScheme(), content = content)
 }

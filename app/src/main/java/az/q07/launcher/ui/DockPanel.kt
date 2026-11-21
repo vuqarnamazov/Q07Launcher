@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import az.q07.launcher.data.AppEntry
 import az.q07.launcher.data.AppRepository
+import az.q07.launcher.data.AppSettings
 import az.q07.launcher.data.HomeTarget
 import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.QuickActions
@@ -60,6 +62,7 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
     val context = LocalContext.current
     var homeChoices by remember { mutableStateOf<List<HomeTarget>?>(null) }
     var pickingSlot by remember { mutableStateOf<Int?>(null) }
+    var settingsOpen by remember { mutableStateOf(false) }
     val byKey = remember(apps) { apps.associateBy { it.key } }
 
     val onFactory: () -> Unit = {
@@ -96,15 +99,23 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
             ) {
                 ClockBlock(big = true)
                 Spacer(Modifier.height(4.dp))
-                Slots { Modifier.fillMaxWidth().height(76.dp) }
+                Slots { Modifier.fillMaxWidth().height(68.dp) }
                 Spacer(Modifier.weight(1f))
-                DockButton(
-                    label = "Zavod menyusu", subtitle = null, bitmap = null,
-                    vector = Icons.Filled.Home, tint = CarColors.Warning,
-                    modifier = Modifier.fillMaxWidth().height(76.dp),
-                    onLongClick = { QuickActions.openHomeSettings(context) },
-                    onClick = onFactory
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DockButton(
+                        label = "", subtitle = null, bitmap = null,
+                        vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
+                        modifier = Modifier.height(68.dp),
+                        onClick = { settingsOpen = true }
+                    )
+                    DockButton(
+                        label = "Zavod menyusu", subtitle = null, bitmap = null,
+                        vector = Icons.Filled.Home, tint = CarColors.Warning,
+                        modifier = Modifier.weight(1f).height(68.dp),
+                        onLongClick = { QuickActions.openHomeSettings(context) },
+                        onClick = onFactory
+                    )
+                }
             }
         } else {
             Row(
@@ -115,6 +126,12 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
                 ClockBlock(big = false)
                 Slots { Modifier.weight(1f).fillMaxHeight() }
                 DockButton(
+                    label = "Ayarlar", subtitle = null, bitmap = null,
+                    vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
+                    modifier = Modifier.weight(0.8f).fillMaxHeight(),
+                    onClick = { settingsOpen = true }
+                )
+                DockButton(
                     label = "Zavod", subtitle = null, bitmap = null,
                     vector = Icons.Filled.Home, tint = CarColors.Warning,
                     modifier = Modifier.weight(0.8f).fillMaxHeight(),
@@ -124,6 +141,8 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, modifier: Modifier = Modi
             }
         }
     }
+
+    if (settingsOpen) SettingsScreen(onClose = { settingsOpen = false })
 
     pickingSlot?.let { slot ->
         AppPickerDialog(
@@ -183,11 +202,11 @@ private fun ClockBlock(big: Boolean) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = timeFmt.format(date),
-                fontSize = if (big) 72.sp else 44.sp,
+                fontSize = if (big) 64.sp else 44.sp,
                 fontWeight = FontWeight.Light,
                 color = CarColors.TextPrimary
             )
-            if (big) {
+            if (big && AppSettings.showSeconds) {
                 Text(
                     text = ":" + secFmt.format(date),
                     fontSize = 28.sp,
