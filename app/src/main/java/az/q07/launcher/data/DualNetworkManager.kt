@@ -31,6 +31,9 @@ import java.net.Socket
  * OBD qoşulanda hotspot müvəqqəti düşə bilər — onLost-da hotspot avtomatik bərpa olunur.
  */
 object DualNetworkManager {
+    /** Həm «WiFi-OBDII», həm «WiFi_OBDII» (və oxşarlar) — Q07-də adapter «WiFi-OBDII» adlanır */
+    const val DEFAULT_OBD = "WiFi?OBD*"
+
     private lateinit var prefs: SharedPreferences
     private lateinit var app: Context
     private val cm get() = app.getSystemService(ConnectivityManager::class.java)
@@ -42,7 +45,7 @@ object DualNetworkManager {
         private set
     var hotspotPass by mutableStateOf("")
         private set
-    var obdSsid by mutableStateOf("WiFi_OBDII")
+    var obdSsid by mutableStateOf(DEFAULT_OBD)
         private set
     var obdPass by mutableStateOf("")
         private set
@@ -77,7 +80,7 @@ object DualNetworkManager {
         prefs = app.getSharedPreferences("q07_dualnet", Context.MODE_PRIVATE)
         hotspotSsid = prefs.getString("hsSsid", "")!!
         hotspotPass = prefs.getString("hsPass", "")!!
-        obdSsid = prefs.getString("obdSsid", "WiFi_OBDII")!!
+        obdSsid = prefs.getString("obdSsid", DEFAULT_OBD)!!.let { if (it == "WiFi_OBDII" || it == "WiFi-OBDII") DEFAULT_OBD else it }
         obdPass = prefs.getString("obdPass", "")!!
         autoStart = prefs.getBoolean("auto", false)
         startMonitoring()
@@ -180,11 +183,19 @@ object DualNetworkManager {
      */
     fun connectToObd(ssid: String = obdSsid, password: String = obdPass) {
         if (ssid.isBlank()) { obdStatus = "OBD SSID daxil edilməyib"; return }
+        // Maşın artıq adapterin Wi-Fi-ına qoşuludursa — sistem pəncərəsinə ehtiyac yoxdur
+        findSystemObdNetwork()?.let { net ->
+            obdNetwork = net
+            obdConnected = true
+            obdStatus = "Qoşulub ✓ (sistem Wi-Fi)"
+            ObdMonitor.restart()
+            return
+        }
         disconnectObd()
         obdWanted = true
 
         val spec = WifiNetworkSpecifier.Builder().apply {
-            if (ssid.endsWith("*")) setSsidPattern(PatternMatcher(ssid.dropLast(1), PatternMatcher.PATTERN_PREFIX))
+            if (ssid.contains('*') || ssid.contains('?')) setSsidPattern(PatternMatcher(toAndroidGlob(ssid), PatternMatcher.PATTERN_SIMPLE_GLOB))
             else setSsid(ssid)
             if (password.isNotEmpty()) setWpa2Passphrase(password)
         }.build()
@@ -237,6 +248,48 @@ object DualNetworkManager {
         }
     }
 
+    /**
+     * İstifadəçi nümunəsi (* = istənilən mətn, ? = bir simvol) → Android PatternMatcher simple glob
+     * (orada «.» = bir simvol, «.*» = istənilən mətn, «\\.» = nöqtənin özü).
+     */
+    fun toAndroidGlob(p: String): String = buildString {
+        p.forEach { ch ->
+            when (ch) {
+                '*' -> append(".*")
+                '?' -> append('.')
+                '.' -> append("\\.")
+                else -> append(ch)
+            }
+        }
+    }
+
+    /** SSID-i glob nümunəsi ilə yoxla (* və ?) */
+    fun ssidMatches(pattern: String, ssid: String?): Boolean {
+        if (ssid == null) return false
+        if (!pattern.contains('*') && !pattern.contains('?')) return ssid == pattern
+        return PatternMatcher(toAndroidGlob(pattern), PatternMatcher.PATTERN_SIMPLE_GLOB).match(ssid)
+    }
+
+    /** Sistem hazırda adapterin Wi-Fi-ına qoşuludursa, həmin şəbəkəni qaytar */
+    @SuppressLint("MissingPermission")
+    fun findSystemObdNetwork(): Network? {
+        @Suppress("DEPRECATION")
+        val ssid = runCatching { wifi.connectionInfo?.ssid?.trim('"') }.getOrNull()
+        if (!ssidMatches(obdSsid, ssid)) return null
+        return findNetworkForHost("192.168.0.10")
+    }
+
+    /** Ünvanı öz alt şəbəkəsində olan Wi-Fi şəbəkəsini tap (məs. 192.168.0.x) */
+    @Suppress("DEPRECATION")
+    private fun findNetworkForHost(host: String): Network? {
+        val prefix = host.substringBeforeLast('.') + "."
+        return cm.allNetworks.firstOrNull { n ->
+            val caps = cm.getNetworkCapabilities(n) ?: return@firstOrNull false
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+                cm.getLinkProperties(n)?.linkAddresses?.any { it.address.hostAddress?.startsWith(prefix) == true } == true
+        }
+    }
+
     fun disconnectObd() {
         obdWanted = false
         obdCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
@@ -251,7 +304,8 @@ object DualNetworkManager {
      * obdNetwork yoxdursa — adi socket (istifadəçi OBD-yə əl ilə qoşulubsa).
      */
     fun openObdSocket(host: String, port: Int, timeoutMs: Int = 4000): Socket {
-        val net = obdNetwork
+        // OBD şəbəkəsi: ya specifier ilə alınan, ya da adapterin alt şəbəkəsində olan sistem Wi-Fi-ı
+        val net = obdNetwork ?: findNetworkForHost(host)
         val s = Socket()
         if (net != null) net.bindSocket(s)
         s.connect(InetSocketAddress(host, port), timeoutMs)

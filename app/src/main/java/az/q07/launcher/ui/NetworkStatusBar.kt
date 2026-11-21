@@ -181,7 +181,7 @@ fun NetworkSetupForm(onSaved: (() -> Unit)? = null) {
         OutlinedTextField(hp, { hp = it }, label = { Text("Şifrə") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Text("OBD2 adapteri (lokal, internetsiz)", fontSize = 17.sp, color = CarColors.TextPrimary)
-        OutlinedTextField(os, { os = it }, label = { Text("Adapter adı — məs. WiFi_OBDII, V-LINK*") },
+        OutlinedTextField(os, { os = it }, label = { Text("Adapter adı — standart: WiFi?OBD* (WiFi-OBDII / WiFi_OBDII)") },
             singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(op, { op = it }, label = { Text("Adapter şifrəsi (açıqdırsa boş qoy)") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
@@ -191,7 +191,7 @@ fun NetworkSetupForm(onSaved: (() -> Unit)? = null) {
             Switch(auto, { auto = it })
         }
         Text(
-            "«*» ilə bitən ad prefiks kimi axtarılır. OBD qoşulanda sistem bir dəfə təsdiq pəncərəsi göstərir.",
+            "«*» istənilən mətn, «?» istənilən bir simvol deməkdir. OBD qoşulanda sistem bir dəfə təsdiq pəncərəsi göstərir.",
             fontSize = 13.sp, color = CarColors.TextSecondary
         )
         TextButton(onClick = {

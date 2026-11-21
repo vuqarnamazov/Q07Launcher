@@ -13,8 +13,8 @@ android {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 10
-        versionName = "1.9"
+        versionCode = 11
+        versionName = "1.10"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
