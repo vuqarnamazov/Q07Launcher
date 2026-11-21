@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -60,6 +61,7 @@ import az.q07.launcher.data.LauncherPrefs
 import az.q07.launcher.data.MediaRepo
 import az.q07.launcher.data.QuickActions
 import az.q07.launcher.data.WeatherRepo
+import az.q07.launcher.data.rememberHomeController
 import az.q07.launcher.ui.theme.CarColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -161,6 +163,10 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
     }
     val onSlotLongClick: (Int) -> Unit = { i -> pickingSlot = i }
     val intensity = rememberGlowIntensity()
+    // Defolt əsas ekran düyməsi (Q07 ⇄ Zavod)
+    val home = rememberHomeController(resumeTick)
+    val homeLabel = if (home.isDefault) "Defolt: Q07" else "Defolt: Zavod"
+    val homeSub = if (home.isDefault) "Toxun → zavoda qaytar" else "Toxun → Q07-ni defolt et"
 
     PanelSurface(modifier) {
         if (vertical) {
@@ -181,17 +187,24 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                     spacing = if (count >= 6) 6.dp else 8.dp
                 )
                 Spacer(Modifier.weight(1f))
+                DockButton(
+                    label = homeLabel, subtitle = homeSub, bitmap = null,
+                    vector = Icons.Filled.SwapHoriz,
+                    tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    onClick = home.toggle
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DockButton(
                         label = "", subtitle = null, bitmap = null,
                         vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
-                        modifier = Modifier.height(64.dp),
+                        modifier = Modifier.height(58.dp),
                         onClick = { settingsOpen = true }
                     )
                     DockButton(
                         label = "Zavod menyusu", subtitle = null, bitmap = null,
                         vector = Icons.Filled.Home, tint = CarColors.Warning,
-                        modifier = Modifier.weight(1f).height(64.dp),
+                        modifier = Modifier.weight(1f).height(58.dp),
                         onLongClick = { QuickActions.openHomeSettings(context) },
                         onClick = onFactory
                     )
@@ -219,6 +232,13 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                     vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
                     modifier = Modifier.weight(0.8f).fillMaxHeight(),
                     onClick = { settingsOpen = true }
+                )
+                DockButton(
+                    label = if (home.isDefault) "Q07" else "Zavod", subtitle = "Defolt", bitmap = null,
+                    vector = Icons.Filled.SwapHoriz,
+                    tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
+                    modifier = Modifier.weight(0.8f).fillMaxHeight(),
+                    onClick = home.toggle
                 )
                 DockButton(
                     label = "Zavod", subtitle = null, bitmap = null,

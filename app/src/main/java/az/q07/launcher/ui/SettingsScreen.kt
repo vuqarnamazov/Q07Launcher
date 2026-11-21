@@ -288,33 +288,22 @@ private fun DockSection() {
 
 @Composable
 private fun HomeSection() {
-    val context = LocalContext.current
-    var enabled by remember { mutableStateOf(HomeMode.isEnabled(context)) }
+    val home = az.q07.launcher.data.rememberHomeController()
     Label(
-        "Q07 Launcher-i əsas ekran kimi istifadə et",
-        "Söndürülü olanda zavod launcher-i əsas qalır, Q07 Launcher adi tətbiq kimi açılır."
+        if (home.isDefault) "Hazırda defolt: Q07 Launcher ✓" else "Hazırda defolt: zavod launcher-i",
+        "Home düyməsi hansı ekranı açsın — istədiyin vaxt dəyiş. Eyni düymə dock-un aşağısında da var."
     )
-    SwitchRow(
-        if (enabled) "Aktivdir — Home düyməsi seçim verir" else "Söndürülüb — zavod launcher-i əsasdır",
-        null, enabled
-    ) { on ->
-        if (on) HomeMode.enable(context) else HomeMode.disable(context)
-        enabled = HomeMode.isEnabled(context)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = home.makeDefault, enabled = !home.isDefault) { Text("Q07 Launcher-i defolt et") }
+        OutlinedButton(onClick = home.restoreFactory, enabled = home.isDefault) { Text("Zavod launcher-inə qaytar") }
     }
     Text(
-        "Aktiv edəndə sistem seçim ekranı açılır: «Q07 Launcher» seç. " +
-            "Geri qaytarmaq üçün bu açarı söndür — zavod launcher-i dərhal əsas olur.",
+        "«Defolt et» basanda sistem soruşur — təsdiqlə. Pəncərə çıxmasa, sistemin əsas ekran ayarı açılır.",
         fontSize = 14.sp, color = CarColors.TextSecondary
     )
-    Label("Təcili geri qaytarma (kompüterdən)")
-    Text(
-        "adb shell pm disable az.q07.launcher/az.q07.launcher.HomeAlias",
-        fontSize = 14.sp, color = CarColors.Warning
-    )
-    Text(
-        "adb shell cmd package set-home-activity com.incall.apps.sdalauncher/com.incall.apps.model_main.MainActivity",
-        fontSize = 14.sp, color = CarColors.Warning
-    )
+    Label("Kompüterdən (ehtiyat)")
+    Text(HomeMode.ADB_SET_DEFAULT, fontSize = 14.sp, color = CarColors.Warning)
+    Text(HomeMode.ADB_RESTORE, fontSize = 14.sp, color = CarColors.Warning)
 }
 
 @Composable
