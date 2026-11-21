@@ -5,30 +5,76 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import az.q07.launcher.data.AppEntry
+import az.q07.launcher.data.AppRepository
 import az.q07.launcher.ui.theme.CarColors
 
-/** 3 sütunlu üfüqi layout: Dock | Modullar | Tətbiqlər */
+/**
+ * Q07 ekranı: 15.4", 2560×1600 (2.5K), fırlana bilən.
+ * Dizayn 1280×800 dp üçün çəkilib və ekrana görə avtomatik böyüdülür/kiçildilir,
+ * ona görə head unit-in density dəyərindən asılı olmayaraq eyni görünür.
+ */
+private const val DESIGN_LONG_SIDE_DP = 1280f
+
 @Composable
 fun LauncherScreen(appsVersion: Int) {
-    Row(
-        modifier = Modifier
+    val context = LocalContext.current
+    val apps by produceState<List<AppEntry>?>(null, appsVersion) {
+        value = AppRepository.loadApps(context)
+    }
+
+    BoxWithConstraints(
+        Modifier
             .fillMaxSize()
             .background(CarColors.Background)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        DockPanel(Modifier.weight(0.22f).fillMaxHeight())
-        ModulesPanel(Modifier.weight(0.38f).fillMaxHeight())
-        AppsPanel(appsVersion, Modifier.weight(0.40f).fillMaxHeight())
+        val landscape = maxWidth >= maxHeight
+        val longSide = if (landscape) maxWidth.value else maxHeight.value
+        val scale = (longSide / DESIGN_LONG_SIDE_DP).coerceIn(0.75f, 2.0f)
+        val base = LocalDensity.current
+
+        CompositionLocalProvider(
+            LocalDensity provides Density(base.density * scale, base.fontScale)
+        ) {
+            if (landscape) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    DockPanel(apps.orEmpty(), vertical = true, Modifier.weight(0.22f).fillMaxHeight())
+                    ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
+                    AppsPanel(apps, columns = 4, Modifier.weight(0.42f).fillMaxHeight())
+                }
+            } else {
+                // Ekran şaquli fırladılanda
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    DockPanel(apps.orEmpty(), vertical = false, Modifier.fillMaxWidth().weight(0.18f))
+                    ModulesPanel(Modifier.fillMaxWidth().weight(0.37f))
+                    AppsPanel(apps, columns = 5, Modifier.fillMaxWidth().weight(0.45f))
+                }
+            }
+        }
     }
 }
 

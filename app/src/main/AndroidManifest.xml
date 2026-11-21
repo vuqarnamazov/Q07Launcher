@@ -8,6 +8,8 @@
         tools:ignore="QueryAllPackagesPermission" />
     <!-- Şəbəkə statusu kartı üçün -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Səsli qeyd (Google-suz, mikrofonla yazma) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <queries>
         <intent>
@@ -51,6 +53,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- "İndi çalır" kartı üçün media sessiyalarına giriş -->
+        <service
+            android:name=".media.MediaListenerService"
+            android:exported="true"
+            android:label="Q07 Launcher media"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".data.ReminderReceiver"

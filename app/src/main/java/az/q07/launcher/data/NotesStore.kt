@@ -10,7 +10,9 @@ data class Note(
     val id: Long,
     val text: String,
     val createdAt: Long,
-    val remindAt: Long? = null
+    val remindAt: Long? = null,
+    /** Səs qeydi faylı (Google səs tanıması olmayanda) */
+    val audioPath: String? = null
 )
 
 /** Qeydləri SharedPreferences-də JSON kimi saxlayır; Compose avtomatik yenilənir. */
@@ -26,15 +28,16 @@ object NotesStore {
         load()
     }
 
-    fun add(text: String) {
+    fun add(text: String, audioPath: String? = null) {
         val clean = text.trim()
-        if (clean.isEmpty()) return
+        if (clean.isEmpty() && audioPath == null) return
         val now = System.currentTimeMillis()
-        notes.add(0, Note(id = now, text = clean, createdAt = now))
+        notes.add(0, Note(id = now, text = clean, createdAt = now, audioPath = audioPath))
         save()
     }
 
     fun remove(id: Long) {
+        notes.filter { it.id == id }.forEach { n -> n.audioPath?.let { java.io.File(it).delete() } }
         notes.removeAll { it.id == id }
         save()
     }
@@ -59,7 +62,8 @@ object NotesStore {
                         id = o.getLong("id"),
                         text = o.getString("text"),
                         createdAt = o.getLong("createdAt"),
-                        remindAt = if (o.has("remindAt") && !o.isNull("remindAt")) o.getLong("remindAt") else null
+                        remindAt = if (o.has("remindAt") && !o.isNull("remindAt")) o.getLong("remindAt") else null,
+                        audioPath = if (o.has("audio") && !o.isNull("audio")) o.getString("audio") else null
                     )
                 )
             }
@@ -74,6 +78,7 @@ object NotesStore {
                 put("text", n.text)
                 put("createdAt", n.createdAt)
                 put("remindAt", n.remindAt ?: JSONObject.NULL)
+                put("audio", n.audioPath ?: JSONObject.NULL)
             })
         }
         prefs.edit().putString(KEY, arr.toString()).apply()

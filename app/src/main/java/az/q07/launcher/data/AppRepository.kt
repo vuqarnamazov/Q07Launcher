@@ -14,7 +14,10 @@ data class AppEntry(
     val packageName: String,
     val component: ComponentName,
     val icon: ImageBitmap
-)
+) {
+    /** Ayarlarda saxlanan unikal açar */
+    val key: String get() = component.flattenToString()
+}
 
 object AppRepository {
 

@@ -28,8 +28,10 @@ interface LauncherModule {
 
 object ModuleRegistry {
     val modules: List<LauncherModule> = listOf(
+        MediaModule,
         VoiceNoteModule,
         NetworkModule,
+        SystemInfoModule,
         // MyModule,  ← yeni modulları bura əlavə et
     )
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {

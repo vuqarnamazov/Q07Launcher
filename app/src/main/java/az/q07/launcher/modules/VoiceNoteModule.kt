@@ -1,9 +1,12 @@
 package az.q07.launcher.modules
 
+import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -23,8 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardVoice
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,11 +51,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import az.q07.launcher.data.AudioNotes
 import az.q07.launcher.data.Note
 import az.q07.launcher.data.NotesStore
 import az.q07.launcher.data.QuickActions
 import az.q07.launcher.data.ReminderScheduler
 import az.q07.launcher.ui.theme.CarColors
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,6 +72,9 @@ object VoiceNoteModule : LauncherModule {
     @Composable
     override fun Summary() {
         val context = LocalContext.current
+        // Google səs tanıması varmı? (Q07-də adətən yoxdur)
+        val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+
         val speech = rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
@@ -73,46 +86,98 @@ object VoiceNoteModule : LauncherModule {
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(CarColors.Accent)
-                    .clickable {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                            .putExtra(
-                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                            )
-                            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "az-AZ")
-                            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Qeydinizi deyin")
-                        try {
-                            speech.launch(intent)
-                        } catch (e: ActivityNotFoundException) {
-                            QuickActions.toast(context, "Səs tanıma xidməti tapılmadı (Google app lazımdır)")
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.Mic, "Səsli qeyd", tint = Color.Black, modifier = Modifier.size(34.dp))
+        val toggleRecording: () -> Unit = {
+            if (AudioNotes.isRecording) {
+                val path = AudioNotes.stop()
+                if (path != null) NotesStore.add("", path)
+                else QuickActions.toast(context, "Qeyd çox qısa idi")
+            } else if (!AudioNotes.start(context)) {
+                QuickActions.toast(context, "Mikrofon açıla bilmədi")
             }
+        }
+
+        val micPermission = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) toggleRecording()
+            else QuickActions.toast(context, "Mikrofon icazəsi verilmədi")
+        }
+
+        val elapsed by produceState(0L, AudioNotes.isRecording) {
+            while (AudioNotes.isRecording) {
+                value = (System.currentTimeMillis() - AudioNotes.recordingStartedAt) / 1000
+                delay(250)
+            }
+            value = 0L
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Əsas düymə: səs yazma (internet və Google tələb etmir)
+            RoundButton(
+                icon = if (AudioNotes.isRecording) Icons.Filled.Stop else Icons.Filled.Mic,
+                color = if (AudioNotes.isRecording) CarColors.Danger else CarColors.Accent,
+                description = "Səs yaz"
+            ) {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted || AudioNotes.isRecording) toggleRecording()
+                else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
+
+            if (speechAvailable) {
+                Spacer(Modifier.width(10.dp))
+                RoundButton(Icons.Filled.KeyboardVoice, CarColors.Green, "Danış, mətnə çevir") {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "az-AZ")
+                        .putExtra(RecognizerIntent.EXTRA_PROMPT, "Qeydinizi deyin")
+                    try {
+                        speech.launch(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        QuickActions.toast(context, "Səs tanıma xidməti tapılmadı")
+                    }
+                }
+            }
+
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                val last = NotesStore.notes.firstOrNull()
-                Text(
-                    text = last?.text ?: "Hələ qeyd yoxdur. Mikrofona toxun.",
-                    fontSize = 17.sp,
-                    color = if (last == null) CarColors.TextSecondary else CarColors.TextPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "Cəmi: ${NotesStore.notes.size} qeyd",
-                    fontSize = 14.sp,
-                    color = CarColors.TextSecondary
-                )
+                if (AudioNotes.isRecording) {
+                    Text(
+                        "● Yazılır… %d:%02d".format(elapsed / 60, elapsed % 60),
+                        fontSize = 18.sp, color = CarColors.Danger
+                    )
+                    Text("Dayandırmaq üçün yenidən toxun", fontSize = 14.sp, color = CarColors.TextSecondary)
+                } else {
+                    val last = NotesStore.notes.firstOrNull()
+                    Text(
+                        text = when {
+                            last == null -> "Hələ qeyd yoxdur. Mikrofona toxun."
+                            last.text.isBlank() -> "🎤 Səs qeydi"
+                            else -> last.text
+                        },
+                        fontSize = 17.sp,
+                        color = if (last == null) CarColors.TextSecondary else CarColors.TextPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text("Cəmi: ${NotesStore.notes.size} qeyd", fontSize = 14.sp, color = CarColors.TextSecondary)
+                }
             }
+        }
+    }
+
+    @Composable
+    private fun RoundButton(icon: ImageVector, color: Color, description: String, onClick: () -> Unit) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(color)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, description, tint = Color.Black, modifier = Modifier.size(34.dp))
         }
     }
 
@@ -152,7 +217,22 @@ object VoiceNoteModule : LauncherModule {
                 .background(CarColors.Panel)
                 .padding(12.dp)
         ) {
-            Text(note.text, fontSize = 16.sp, color = CarColors.TextPrimary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                note.audioPath?.let { path ->
+                    val playing = AudioNotes.playingPath == path
+                    IconButton(onClick = { AudioNotes.togglePlay(path) }) {
+                        Icon(
+                            if (playing) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                            if (playing) "Dayandır" else "Dinlə",
+                            tint = CarColors.Accent
+                        )
+                    }
+                }
+                Text(
+                    if (note.text.isBlank()) "🎤 Səs qeydi" else note.text,
+                    fontSize = 16.sp, color = CarColors.TextPrimary
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = note.remindAt?.let { "⏰ " + fmt.format(Date(it)) } ?: fmt.format(Date(note.createdAt)),
@@ -175,6 +255,7 @@ object VoiceNoteModule : LauncherModule {
                 }
                 IconButton(onClick = {
                     if (note.remindAt != null) ReminderScheduler.cancel(context, note)
+                    if (AudioNotes.playingPath == note.audioPath) AudioNotes.stopPlayback()
                     NotesStore.remove(note.id)
                 }) {
                     Icon(Icons.Filled.Delete, "Sil", tint = CarColors.Danger)

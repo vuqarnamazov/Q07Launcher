@@ -38,7 +38,7 @@ object ReminderScheduler {
     private fun pendingIntent(context: Context, note: Note): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java)
             .putExtra(EXTRA_ID, note.id)
-            .putExtra(EXTRA_TEXT, note.text)
+            .putExtra(EXTRA_TEXT, note.text.ifBlank { "🎤 Səs qeydi" })
         return PendingIntent.getBroadcast(
             context,
             note.id.toInt(),
