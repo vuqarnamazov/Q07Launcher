@@ -9,6 +9,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -170,44 +174,66 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
 
     PanelSurface(modifier) {
         if (vertical) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ClockBlock(big = true)
-                GlowingFlowNavigationColumn(
-                    items = slotItems,
-                    selectedIndex = selectedSlot,
-                    onItemSelected = onSlotSelected,
-                    onItemLongClick = onSlotLongClick,
-                    onItemDoubleClick = onSlotDouble,
-                    glowColor = baseGlow,
-                    intensity = intensity,
-                    itemHeight = when (count) { 3, 4 -> 68.dp; 5 -> 58.dp; else -> 50.dp },
-                    spacing = if (count >= 6) 6.dp else 8.dp
-                )
-                Spacer(Modifier.weight(1f))
-                DockButton(
-                    label = homeLabel, subtitle = homeSub, bitmap = null,
-                    vector = Icons.Filled.SwapHoriz,
-                    tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
-                    onClick = home.toggle
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DockButton(
-                        label = "", subtitle = null, bitmap = null,
-                        vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
-                        modifier = Modifier.height(58.dp),
-                        onClick = { settingsOpen = true }
-                    )
-                    DockButton(
-                        label = "Zavod menyusu", subtitle = null, bitmap = null,
-                        vector = Icons.Filled.Home, tint = CarColors.Warning,
-                        modifier = Modifier.weight(1f).height(58.dp),
-                        onLongClick = { QuickActions.openHomeSettings(context) },
-                        onClick = onFactory
-                    )
+            // Ölçü böyüdüləndə (120%+) heç nə itməsin: slot hündürlüyü mövcud yerə görə hesablanır,
+            // sığmasa panel sürüşdürülür
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val gap = 12.dp
+                val btnH = 56.dp
+                val slotSpacing = if (count >= 6) 6.dp else 8.dp
+                val compactClock = maxWidth < 270.dp
+                val clockH = if (compactClock) 80.dp else 96.dp
+                val fixed = 40.dp + clockH + btnH * 2 + gap * 4 + 12.dp + slotSpacing * (count - 1)
+                val itemH = ((maxHeight - fixed) / count).coerceIn(40.dp, 68.dp)
+                val boxHeight = maxHeight
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(min = boxHeight)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                        ClockBlock(big = true, compact = compactClock)
+                        GlowingFlowNavigationColumn(
+                            items = slotItems,
+                            selectedIndex = selectedSlot,
+                            onItemSelected = onSlotSelected,
+                            onItemLongClick = onSlotLongClick,
+                            onItemDoubleClick = onSlotDouble,
+                            glowColor = baseGlow,
+                            intensity = intensity,
+                            itemHeight = itemH,
+                            spacing = slotSpacing
+                        )
+                    }
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(gap),
+                        modifier = Modifier.padding(top = gap)
+                    ) {
+                        DockButton(
+                            label = homeLabel, subtitle = homeSub, bitmap = null,
+                            vector = Icons.Filled.SwapHoriz,
+                            tint = if (home.isDefault) CarColors.Green else CarColors.Warning,
+                            modifier = Modifier.fillMaxWidth().height(btnH),
+                            onClick = home.toggle
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DockButton(
+                                label = "", subtitle = null, bitmap = null,
+                                vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
+                                modifier = Modifier.height(btnH),
+                                onClick = { settingsOpen = true }
+                            )
+                            DockButton(
+                                label = "Zavod menyusu", subtitle = null, bitmap = null,
+                                vector = Icons.Filled.Home, tint = CarColors.Warning,
+                                modifier = Modifier.weight(1f).height(btnH),
+                                onLongClick = { QuickActions.openHomeSettings(context) },
+                                onClick = onFactory
+                            )
+                        }
+                    }
                 }
             }
         } else {
@@ -294,7 +320,7 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
 }
 
 @Composable
-private fun ClockBlock(big: Boolean) {
+private fun ClockBlock(big: Boolean, compact: Boolean = false) {
     val context = LocalContext.current
     val now by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
@@ -320,11 +346,11 @@ private fun ClockBlock(big: Boolean) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = timeFmt.format(date),
-                fontSize = if (big) 60.sp else 44.sp,
+                fontSize = if (big && !compact) 60.sp else if (big) 48.sp else 44.sp,
                 fontWeight = FontWeight.Light,
                 color = CarColors.TextPrimary
             )
-            if (big && AppSettings.showSeconds) {
+            if (big && !compact && AppSettings.showSeconds) {
                 Text(
                     text = ":" + secFmt.format(date),
                     fontSize = 26.sp,

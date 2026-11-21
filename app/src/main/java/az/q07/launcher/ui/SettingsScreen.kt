@@ -112,6 +112,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                     .width(280.dp)
                     .fillMaxHeight()
                     .background(CarColors.Panel)
+                    .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {

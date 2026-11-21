@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -84,38 +85,48 @@ fun NetworkStatusBar(modifier: Modifier = Modifier) {
         else -> "Qoşulmayıb"
     }
 
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatusChip(
-            icon = Icons.Filled.PhoneAndroid,
-            title = "Telefon Wi-Fi",
-            status = phoneText,
-            color = phoneColor,
-            action = if (dm.phoneConnected) null else "Qoş",
-            modifier = Modifier.weight(1f),
-            onLongClick = { setupOpen = true },
-            onAction = {
-                if (dm.hotspotSsid.isBlank()) setupOpen = true
-                else withLocation { dm.connectToPhoneHotspot(); QuickActions.toast(context, dm.lastMessage) }
-            }
-        )
-        StatusChip(
-            icon = Icons.Filled.DirectionsCar,
-            title = "OBD",
-            status = dm.obdStatus,
-            color = if (dm.obdConnected) CarColors.Green else CarColors.Danger,
-            action = if (dm.obdConnected) "Ayır" else "Qoş",
-            modifier = Modifier.weight(1f),
-            onLongClick = { setupOpen = true },
-            onAction = {
-                if (dm.obdConnected) dm.disconnectObd()
-                else if (dm.obdSsid.isBlank()) setupOpen = true
-                else withLocation {
-                    // OBD oxunuşu Wi-Fi rejiminə keçsin
-                    if (AppSettings.obdMode != "wifi") AppSettings.update { obdMode = "wifi" }
-                    dm.connectToObd()
+    // Dar paneldə (böyük ölçüdə) göstəricilər alt-alta düzülür — heç biri itmir
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val narrow = maxWidth < 440.dp
+        val chips: @Composable (Modifier) -> Unit = { chipMod ->
+            StatusChip(
+                icon = Icons.Filled.PhoneAndroid,
+                title = "Telefon Wi-Fi",
+                status = phoneText,
+                color = phoneColor,
+                action = if (dm.phoneConnected) null else "Qoş",
+                modifier = chipMod,
+                onLongClick = { setupOpen = true },
+                onAction = {
+                    if (dm.hotspotSsid.isBlank()) setupOpen = true
+                    else withLocation { dm.connectToPhoneHotspot(); QuickActions.toast(context, dm.lastMessage) }
                 }
+            )
+            StatusChip(
+                icon = Icons.Filled.DirectionsCar,
+                title = "OBD",
+                status = dm.obdStatus,
+                color = if (dm.obdConnected) CarColors.Green else CarColors.Danger,
+                action = if (dm.obdConnected) "Ayır" else "Qoş",
+                modifier = chipMod,
+                onLongClick = { setupOpen = true },
+                onAction = {
+                    if (dm.obdConnected) dm.disconnectObd()
+                    else if (dm.obdSsid.isBlank()) setupOpen = true
+                    else withLocation {
+                        if (AppSettings.obdMode != "wifi") AppSettings.update { obdMode = "wifi" }
+                        dm.connectToObd()
+                    }
+                }
+            )
+        }
+        if (narrow) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { chips(Modifier.fillMaxWidth()) }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                chips(Modifier.weight(1f))
             }
-        )
+        }
     }
 
     if (setupOpen) NetworkSetupDialog(onDismiss = { setupOpen = false })
