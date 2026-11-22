@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         DualNetworkManager.init(applicationContext)
         WidgetStore.init(applicationContext)
         az.q07.launcher.data.SelfDiag.init(applicationContext)
+        az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         ReminderScheduler.createChannel(applicationContext)
 
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AppVisibility.visible = true
+        az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         runCatching { WidgetStore.host.startListening() }
     }
 

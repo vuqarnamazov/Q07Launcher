@@ -4,6 +4,9 @@
 
     <!-- Android 11-də bütün tətbiqləri görmək üçün -->
     <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <!-- Şəbəkə statusu kartı üçün -->

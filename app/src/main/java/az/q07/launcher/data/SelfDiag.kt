@@ -121,6 +121,26 @@ object SelfDiag {
         }
     }
 
+    /**
+     * İstifadəçinin istəyi ilə: launcher-in öz «sürüş rejimi» xüsusi imkan xidməti siyahıdan silinibsə
+     * (maşında başqa tətbiq siyahını yenidən yazanda olur) onu geri əlavə edir.
+     * Yalnız WRITE_SECURE_SETTINGS adb ilə verilibsə işləyir; yalnız ÖZ xidmətini əlavə edir, başqasına toxunmur.
+     */
+    fun ensureAccessibility(context: Context) {
+        if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val cr = context.contentResolver
+        val svc = "${context.packageName}/${DriveModeService::class.java.name}"
+        val cur = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        if (cur.contains("DriveModeService")) return
+        runCatching {
+            val next = if (cur.isBlank() || cur == "null") svc else cur.trimEnd(':') + ":" + svc
+            android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, next)
+            android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            log("selfheal", "sürüş rejimi xidməti siyahıdan silinmişdi — yenidən aktiv edildi")
+        }.onFailure { log("selfheal", "xidməti bərpa etmək olmadı: $it") }
+    }
+
     // ---------- öyrənilmiş başlıqlar (öz-özünə düzəliş) ----------
     fun learnTitle(control: VehicleControl, text: String) {
         if (!::prefs.isInitialized || text.isBlank()) return
