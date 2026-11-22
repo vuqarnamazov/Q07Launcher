@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.layout.boundsInWindow
@@ -84,14 +86,18 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                 }
             } else if (landscape) {
                 // Telefon kimi səhifələr: sola sürüşdür → 2-ci səhifə (açdığım proqramlar)
-                val pager = rememberPagerState(pageCount = { 2 })
+                val pager = rememberPagerState(pageCount = { 3 })
+                val pagerScope = rememberCoroutineScope()
                 Box(Modifier.fillMaxSize()) {
                     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-                        Row(
+                        if (page == 0) {
+                            // Səhifə 0: kokpit (fırlanan avtomobil + idarəetmə)
+                            CockpitPage(apps, onOpenModules = { pagerScope.launch { pager.animateScrollToPage(1) } })
+                        } else Row(
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            if (page == 0) {
+                            if (page == 1) {
                                 DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
                                 ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
                                 AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
@@ -114,7 +120,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                         Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        repeat(2) { i ->
+                        repeat(3) { i ->
                             Box(
                                 Modifier.size(if (pager.currentPage == i) 10.dp else 7.dp)
                                     .clip(androidx.compose.foundation.shape.CircleShape)
