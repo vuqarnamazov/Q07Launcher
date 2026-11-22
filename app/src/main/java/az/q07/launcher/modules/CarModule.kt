@@ -11,7 +11,8 @@ import androidx.compose.foundation.layout.Box
 import az.q07.launcher.data.WindowLauncher
 import az.q07.launcher.data.FactoryBridge
 import az.q07.launcher.data.FactoryJob
-import az.q07.launcher.data.TabGroup
+import az.q07.launcher.data.VehicleControl
+import az.q07.launcher.data.VehicleQuickControlHelper
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
@@ -150,70 +151,67 @@ object CarModule : LauncherModule {
      * Changan SDK rejimi dəyişməyi yalnız icazəli (zavod) tətbiqlərə verir (-1001), ona görə düymə
      * zavodun «Avtomobil parametrləri» ekranını launcher-in yanında pəncərədə açır — orada bir toxunuşla seçilir.
      */
-    /** Sürüş rejimi (qaz pedalı) + Amortizator (asqı) + Təkər təzyiqi — zavod ekranına girmədən */
+    /**
+     * Sürüş rejimi, enerji bərpası, asqı, sükan gücləndiricisi, əyləc rejimi —
+     * VehicleQuickControlHelper ilə, zavod menyusunu göstərmədən.
+     */
     @Composable
     private fun DriveModeBar() {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
-        val enabled = remember { FactoryBridge.isEnabled(context) }
-        // ilk dəfə: hazırkı rejimləri və təkərləri səssizcə oxu
+        val enabled = remember { VehicleQuickControlHelper.isServiceEnabled(context) }
         LaunchedEffect(enabled) {
             if (enabled && activity != null) {
-                if (FactoryBridge.current.value.isEmpty()) FactoryBridge.enqueue(activity, FactoryJob.Tab(TabGroup.PEDAL, null))
+                if (FactoryBridge.current.value.isEmpty()) VehicleQuickControlHelper.refresh(activity)
                 if (FactoryBridge.tyres.value == null) FactoryBridge.enqueue(activity, FactoryJob.ReadHome)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            ModeRow(
-                "Sürüş rejimi (qaz pedalı)", TabGroup.PEDAL,
-                listOf(
-                    Triple(2, "Sport", Color(0xFFFF4D4D)),
-                    Triple(1, "Standart", Color(0xFF4DA3FF)),
-                    Triple(0, "Komfort", Color(0xFF3DDC97))
-                )
-            )
-            ModeRow(
-                "Amortizator (asqı)", TabGroup.SUSPENSION,
-                listOf(
-                    Triple(0, "Comfort", Color(0xFF3DDC97)),
-                    Triple(1, "Standart", Color(0xFF4DA3FF)),
-                    Triple(2, "Sport", Color(0xFFFF8A3D)),
-                    Triple(3, "Sport+", Color(0xFFFF4D4D)),
-                    Triple(4, "Smart", Color(0xFFB36BFF))
-                )
-            )
+            VehicleControl.values().forEach { ModeRow(it) }
             TyreCard()
             if (!enabled) {
                 Text(
-                    "Rejim düymələri və təkər təzyiqi üçün «Q07 Launcher — sürüş rejimi» xidməti aktiv olmalıdır.",
-                    fontSize = 12.sp, color = CarColors.Warning
+                    "Bu düymələr üçün «Q07 Launcher — sürüş rejimi» xüsusi imkan xidməti aktiv olmalıdır. Toxun — ayarlar.",
+                    fontSize = 12.sp, color = CarColors.Warning,
+                    modifier = Modifier.clickable { VehicleQuickControlHelper.openAccessibilitySettings(context) }
                 )
             }
         }
     }
 
+    private val modePalette = listOf(
+        Color(0xFF3DDC97), Color(0xFF4DA3FF), Color(0xFFFF8A3D), Color(0xFFFF4D4D), Color(0xFFB36BFF)
+    )
+
     @Composable
-    private fun ModeRow(title: String, group: TabGroup, items: List<Triple<Int, String, Color>>) {
+    private fun ModeRow(control: VehicleControl) {
         val context = LocalContext.current
         val activity = context as? android.app.Activity
         val current by FactoryBridge.current.collectAsState()
-        val busyGroup by FactoryBridge.busyGroup.collectAsState()
+        val labels by FactoryBridge.labels.collectAsState()
+        val busy by FactoryBridge.busyControl.collectAsState()
         val working by FactoryBridge.working.collectAsState()
         val msg by FactoryBridge.message.collectAsState()
-        val sel = current[group]
+        val sel = current[control]
+        val names = labels[control]?.takeIf { it.isNotEmpty() } ?: control.options
+        // Sürüş rejimində Sport solda olsun (istifadəçi alışqanlığı), qalanları zavod sırası ilə
+        val order = if (control == VehicleControl.DRIVE_MODE) listOf(2, 1, 0) else names.indices.toList()
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
-                if (busyGroup == group) Text("dəyişdirilir…", fontSize = 12.sp, color = CarColors.Warning)
-                else if (sel != null) Text("indi: ${group.names[sel]}", fontSize = 12.sp, color = CarColors.TextSecondary)
+                Text(control.title, fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
+                when {
+                    busy == control -> Text("dəyişdirilir…", fontSize = 12.sp, color = CarColors.Warning)
+                    sel != null -> Text("indi: ${names.getOrNull(sel) ?: "—"}", fontSize = 12.sp, color = CarColors.TextSecondary)
+                }
             }
             BoxWithConstraints(Modifier.fillMaxWidth()) {
-                // dar ekranda 5 düymə iki sıraya düşür — heç biri itmir
-                val perRow = if (maxWidth / items.size < 74.dp) 3 else items.size
+                val perRow = if (maxWidth / order.size < 74.dp) 3 else order.size
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.chunked(perRow).forEach { row ->
+                    order.chunked(perRow).forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { (idx, label, color) ->
+                            row.forEach { idx ->
+                                val color = if (control == VehicleControl.DRIVE_MODE) listOf(modePalette[0], modePalette[1], modePalette[3])[idx]
+                                            else modePalette[idx % modePalette.size]
                                 val active = sel == idx
                                 Box(
                                     Modifier
@@ -223,12 +221,14 @@ object CarModule : LauncherModule {
                                         .background(if (active) color.copy(alpha = 0.28f) else CarColors.PanelAlt)
                                         .border(1.5.dp, if (active) color else color.copy(alpha = 0.35f), RoundedCornerShape(21.dp))
                                         .clickable(enabled = !working && activity != null && !active) {
-                                            FactoryBridge.enqueue(activity!!, FactoryJob.Tab(group, idx))
+                                            if (!VehicleQuickControlHelper.execute(activity!!, control, idx)) {
+                                                VehicleQuickControlHelper.openAccessibilitySettings(context)
+                                            }
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        label, fontSize = 14.sp, maxLines = 1,
+                                        names.getOrNull(idx) ?: "#$idx", fontSize = 14.sp, maxLines = 1,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         color = if (active) color else CarColors.TextPrimary
                                     )
@@ -239,7 +239,7 @@ object CarModule : LauncherModule {
                     }
                 }
             }
-            if (busyGroup == null && msg != null && group == TabGroup.PEDAL) {
+            if (busy == null && msg != null && control == VehicleControl.DRIVE_MODE) {
                 Text(msg!!, fontSize = 11.sp, color = CarColors.TextSecondary)
             }
         }

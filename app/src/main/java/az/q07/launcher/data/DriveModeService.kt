@@ -1,11 +1,13 @@
 package az.q07.launcher.data
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
@@ -21,38 +23,34 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-
-/** Zavod «Sürüş» səhifəsindəki sekmə qrupları (soldan sağa sıra ilə) */
-enum class TabGroup(val maskId: String, val names: List<String>) {
-    PEDAL("v_tab_drive_mode_mask", listOf("Komfort", "Standart", "Sport")),
-    SUSPENSION("v_tab_suspension_strength_mask", listOf("Comfort", "Standart", "Sport", "Sport+", "Smart"))
-}
+import kotlin.math.abs
 
 data class Tyres(val fl: String, val fr: String, val rl: String, val rr: String, val unit: String, val at: Long)
 
 sealed class FactoryJob {
     /** index = null → yalnız oxu */
-    data class Tab(val group: TabGroup, val index: Int?) : FactoryJob()
+    data class Control(val control: VehicleControl, val index: Int?) : FactoryJob()
     object ReadHome : FactoryJob()
 }
 
 /**
- * Zavod tətbiqləri ilə körpü (Changan SDK üçüncü tərəfə bağlıdır, ona görə xüsusi imkan xidməti ilə):
- *  1) launcher-in ekran görüntüsü üstə «örtük» kimi qoyulur — istifadəçi heç nə görmür,
- *  2) altda zavod ekranı açılır, xidmət lazımi düyməni basır / dəyəri oxuyur,
- *  3) launcher yenidən önə gəlir, örtük götürülür.
+ * Zavod tətbiqləri ilə körpü:
+ *  1) launcher görüntüsü örtük kimi qoyulur — istifadəçi zavod menyusunu görmür,
+ *  2) altda zavod ekranı açılır, xidmət lazımi idarəetməni dəyişir / dəyəri oxuyur,
+ *  3) launcher önə qayıdır, örtük götürülür.
  */
 object FactoryBridge {
     const val VS = "com.incall.apps.vehiclesetting"
     const val HOME = "com.incall.apps.sdalauncher"
 
-    private val _current = MutableStateFlow<Map<TabGroup, Int>>(emptyMap())
-    val current: StateFlow<Map<TabGroup, Int>> = _current
+    private val _current = MutableStateFlow<Map<VehicleControl, Int>>(emptyMap())
+    val current: StateFlow<Map<VehicleControl, Int>> = _current
+    private val _labels = MutableStateFlow<Map<VehicleControl, List<String>>>(emptyMap())
+    val labels: StateFlow<Map<VehicleControl, List<String>>> = _labels
     private val _tyres = MutableStateFlow<Tyres?>(null)
     val tyres: StateFlow<Tyres?> = _tyres
-    private val _busy = MutableStateFlow<TabGroup?>(null)
-    /** hansı qrup dəyişdirilir (UI üçün); ReadHome üçün null qalır */
-    val busyGroup: StateFlow<TabGroup?> = _busy
+    private val _busy = MutableStateFlow<VehicleControl?>(null)
+    val busyControl: StateFlow<VehicleControl?> = _busy
     private val _working = MutableStateFlow(false)
     val working: StateFlow<Boolean> = _working
     private val _message = MutableStateFlow<String?>(null)
@@ -65,8 +63,11 @@ object FactoryBridge {
     @Volatile internal var service: DriveModeService? = null
     private var activityRef: java.lang.ref.WeakReference<Activity>? = null
 
-    internal fun report(group: TabGroup, i: Int) { _current.value = _current.value + (group to i) }
+    internal fun report(c: VehicleControl, i: Int) { if (_current.value[c] != i) _current.value = _current.value + (c to i) }
+    internal fun reportLabels(c: VehicleControl, l: List<String>) { if (_labels.value[c] != l) _labels.value = _labels.value + (c to l) }
     internal fun reportTyres(t: Tyres) { _tyres.value = t }
+    internal fun setMessage(m: String?) { _message.value = m }
+    internal fun setBusy(c: VehicleControl?) { _busy.value = c }
 
     fun isEnabled(context: Context): Boolean {
         if (service != null) return true
@@ -78,6 +79,8 @@ object FactoryBridge {
         if (!isEnabled(activity)) { _message.value = "Xüsusi imkan xidməti aktiv deyil"; return }
         if (queue.any { it == j } || job == j) return
         activityRef = java.lang.ref.WeakReference(activity)
+        // eyni idarəetmə üçün köhnə əmri yenisi əvəz edir
+        if (j is FactoryJob.Control) queue.removeAll { it is FactoryJob.Control && it.control == j.control }
         queue.addLast(j)
         if (job == null) next()
     }
@@ -87,9 +90,8 @@ object FactoryBridge {
         val act = activityRef?.get() ?: run { queue.clear(); _working.value = false; return }
         job = j
         _working.value = true
-        _busy.value = (j as? FactoryJob.Tab)?.takeIf { it.index != null }?.group
+        _busy.value = (j as? FactoryJob.Control)?.takeIf { it.index != null }?.control
         _message.value = null
-        // bir kadr gözlə ki «dəyişdirilir…» yazısı da örtüyə düşsün
         main.postDelayed({ snapshotAndLaunch(act, j) }, 60)
     }
 
@@ -103,7 +105,9 @@ object FactoryBridge {
             startedAt = System.currentTimeMillis()
             launchTarget(act, j)
             service?.startPolling()
-            main.postDelayed({ if (job === j) finish(j, if (j is FactoryJob.Tab && j.index != null) "Alınmadı — yenidən bas" else null) }, 9000)
+            main.postDelayed({
+                if (job === j) finish(j, if (j is FactoryJob.Control && j.index != null) "Alınmadı — yenidən bas" else null)
+            }, 9000)
         }
         if (src.width() <= 0 || src.height() <= 0) { go(null); return }
         val bmp = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888)
@@ -113,14 +117,19 @@ object FactoryBridge {
     }
 
     private fun launchTarget(context: Context, j: FactoryJob) {
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION
         val intent = when (j) {
-            is FactoryJob.Tab -> Intent(Intent.ACTION_VIEW, Uri.parse("changan://sda/hmi/vehiclesetting")).setPackage(VS)
+            is FactoryJob.Control -> Intent(Intent.ACTION_VIEW, Uri.parse("changan://sda/hmi/vehiclesetting")).setPackage(VS)
             FactoryJob.ReadHome -> Intent(Intent.ACTION_MAIN).setComponent(ComponentName(HOME, "com.incall.apps.model_main.MainActivity"))
-        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }.onFailure { finish(j, "Zavod ekranı açılmadı") }
+        }.addFlags(flags)
+        runCatching { context.startActivity(intent) }.onFailure {
+            // URI işləməsə — birbaşa MainActivity
+            runCatching {
+                context.startActivity(Intent().setComponent(ComponentName(VS, "$VS.ui.activity.MainActivity")).addFlags(flags))
+            }.onFailure { finish(j, "Zavod ekranı açılmadı") }
+        }
     }
 
-    /** xidmət işi bitirəndə çağırır */
     internal fun finish(j: FactoryJob, msg: String?) {
         if (job !== j) return
         job = null
@@ -129,9 +138,8 @@ object FactoryBridge {
         val ctx = activityRef?.get() ?: service
         runCatching {
             ctx?.startActivity(Intent(ctx, az.q07.launcher.MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION))
         }
-        // launcher tam önə gələndən sonra örtüyü götür
         main.postDelayed({
             if (queue.isEmpty()) service?.hideCover()
             next()
@@ -141,13 +149,16 @@ object FactoryBridge {
 
 class DriveModeService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
-    private var clickedAt = 0L
+    private var actedAt = 0L
     private var cover: ImageView? = null
+    private var navAt = 0L
+    private var navTries = 0
 
     override fun onServiceConnected() { FactoryBridge.service = this }
     override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
     override fun onInterrupt() {}
 
+    // ---------------- örtük ----------------
     fun showCover(bmp: Bitmap?, frame: Rect) {
         if (cover != null) return
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -171,8 +182,8 @@ class DriveModeService : AccessibilityService() {
         runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) }
     }
 
+    // ---------------- hadisələr ----------------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // ön plandakı tətbiq dəyişəndə yan paneli göstər/gizlət
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && FactoryBridge.job == null) {
             event.packageName?.toString()?.let { SidePanel.onForeground(this, it) }
         }
@@ -181,8 +192,6 @@ class DriveModeService : AccessibilityService() {
         process()
     }
 
-    private var navAt = 0L
-    private var navTries = 0
     private val poller = object : Runnable {
         override fun run() {
             if (FactoryBridge.job == null) return
@@ -191,121 +200,181 @@ class DriveModeService : AccessibilityService() {
         }
     }
 
-    /** İş başlayanda çağırılır: hadisə gəlməsə də hər 350 ms yoxla */
     fun startPolling() {
-        navTries = 0; navAt = 0L
+        navTries = 0; navAt = 0L; actedAt = 0L
         main.removeCallbacks(poller)
         main.postDelayed(poller, 400)
     }
 
+    private fun roots(): List<AccessibilityNodeInfo> = buildList {
+        windows?.forEach { w -> w.root?.let { add(it) } }
+        rootInActiveWindow?.let { add(it) }
+    }
+
+    private fun vsRoot() = roots().firstOrNull { it.packageName == FactoryBridge.VS }
+
+    /** Zavod «Sürüş» səhifəsi artıq görünürsə — örtüksüz, birbaşa dəyiş */
+    fun tryDirect(control: VehicleControl, index: Int): Boolean {
+        if (FactoryBridge.job != null) return false
+        val root = vsRoot() ?: return false
+        if (readState(root, control) == null && control.kind == VehicleControl.Kind.TABS) return false
+        if (find(root, control) == null) return false
+        FactoryBridge.setBusy(control)
+        act(root, control, index)
+        main.postDelayed({
+            val s = vsRoot()?.let { readState(it, control) }
+            FactoryBridge.setBusy(null)
+            FactoryBridge.setMessage(if (s == index) "${VehicleQuickControlHelper.label(control, index)} seçildi" else "Maşın qəbul etmədi")
+        }, 800)
+        return true
+    }
+
     private fun process() {
-        val roots = buildList {
-            windows?.forEach { w -> w.root?.let { add(it) } }
-            rootInActiveWindow?.let { add(it) }
+        val all = roots()
+        all.firstOrNull { it.packageName == FactoryBridge.VS }?.let { r ->
+            VehicleControl.values().forEach { c -> readState(r, c)?.let { FactoryBridge.report(c, it) } }
         }
-        // passiv oxuma: zavod ekranları görünəndə dəyərləri yenilə
-        var tabsSeen: Map<TabGroup, List<AccessibilityNodeInfo>> = emptyMap()
-        roots.firstOrNull { it.packageName == FactoryBridge.VS }?.let { r ->
-            tabsSeen = TabGroup.values().associateWith { findTabs(r, it) }.filterValues { it.isNotEmpty() }
-            tabsSeen.forEach { (g, tabs) -> selected(tabs).takeIf { it >= 0 }?.let { FactoryBridge.report(g, it) } }
-        }
-        roots.firstOrNull { it.packageName == FactoryBridge.HOME }?.let { r -> readTyres(r) }
+        all.firstOrNull { it.packageName == FactoryBridge.HOME }?.let { readTyres(it) }
 
         val j = FactoryBridge.job ?: return
         when (j) {
             FactoryJob.ReadHome -> if (FactoryBridge.tyres.value?.let { System.currentTimeMillis() - it.at < 3000 } == true) {
                 FactoryBridge.finish(j, null)
             }
-            is FactoryJob.Tab -> {
-                val tabs = tabsSeen[j.group] ?: run {
-                    roots.firstOrNull { it.packageName == FactoryBridge.VS }?.let { navigateToDrive(it, j.group) }
-                    return
+            is FactoryJob.Control -> {
+                val root = all.firstOrNull { it.packageName == FactoryBridge.VS } ?: return
+                val found = find(root, j.control)
+                if (found == null || !found.isVisibleToUser) { navigate(root); return }
+                val target = j.index ?: run { FactoryBridge.finish(j, null); return }
+                val state = readState(root, j.control)
+                if (state == target) {
+                    FactoryBridge.finish(j, "${VehicleQuickControlHelper.label(j.control, target)} seçildi"); return
                 }
-                val sel = selected(tabs)
-                val target = j.index
-                if (target == null) { FactoryBridge.finish(j, null); return }
-                if (sel == target) { FactoryBridge.finish(j, "${j.group.names[target]} seçildi"); return }
-                if (System.currentTimeMillis() - clickedAt < 700) return
-                clickedAt = System.currentTimeMillis()
-                val node = tabs.getOrNull(target) ?: return
-                val clickable = generateSequence(node) { it.parent }.firstOrNull { it.isClickable }
-                val ok = clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-                Log.i("Q07DRIVE", "click ${j.group} target=$target ok=$ok sel=$sel")
-                if (!ok) { val r = Rect(); node.getBoundsInScreen(r); tap(r.exactCenterX(), r.exactCenterY()) }
+                if (System.currentTimeMillis() - actedAt < 900) return
+                actedAt = System.currentTimeMillis()
+                act(root, j.control, target)
                 main.postDelayed({
                     if (FactoryBridge.job !== j) return@postDelayed
-                    val r = (windows?.mapNotNull { it.root } ?: emptyList()).firstOrNull { it.packageName == FactoryBridge.VS }
-                    val s2 = r?.let { selected(findTabs(it, j.group)) } ?: -1
-                    if (s2 >= 0) FactoryBridge.report(j.group, s2)
-                    FactoryBridge.finish(j, if (s2 == target) "${j.group.names[target]} seçildi" else "Maşın qəbul etmədi")
+                    val s2 = vsRoot()?.let { readState(it, j.control) }
+                    if (s2 != null) FactoryBridge.report(j.control, s2)
+                    if (s2 == target) FactoryBridge.finish(j, "${VehicleQuickControlHelper.label(j.control, target)} seçildi")
                 }, 700)
             }
         }
     }
 
-    /**
-     * Zavod «Ayarlar» başqa səhifədə qalıbsa (məs. «Avtomobil»): soldakı menyudan «Sürüş»ə keç,
-     * sekmələr görünmürsə səhifəni yuxarı/aşağı sürüşdür.
-     */
-    private fun navigateToDrive(root: AccessibilityNodeInfo, g: TabGroup) {
+    // ---------------- axtarış / oxuma ----------------
+    private fun id(x: String) = "${FactoryBridge.VS}:id/$x"
+    private fun bounds(n: AccessibilityNodeInfo) = Rect().also { n.getBoundsInScreen(it) }
+
+    /** idarəetmənin əsas düyünü (sekmə sırası / sürgü maskası) */
+    private fun find(root: AccessibilityNodeInfo, c: VehicleControl): AccessibilityNodeInfo? = when (c.kind) {
+        VehicleControl.Kind.TABS -> tabs(root, c).firstOrNull()
+        else -> c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() }
+    }
+
+    private fun tabs(root: AccessibilityNodeInfo, c: VehicleControl): List<AccessibilityNodeInfo> {
+        val anchor = root.findAccessibilityNodeInfosByViewId(id(c.anchorId)).firstOrNull() ?: return emptyList()
+        val a = bounds(anchor)
+        val list = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
+            .filter { val r = bounds(it); r.top >= a.bottom - 4 && r.top <= a.bottom + 260 }
+            .sortedBy { bounds(it).left }
+        if (list.isNotEmpty()) FactoryBridge.reportLabels(c, list.map { it.text?.toString().orEmpty() })
+        return list
+    }
+
+    /** «Value, 35%» → 35 (sürgünün yanında) */
+    private fun sliderPercent(root: AccessibilityNodeInfo, c: VehicleControl): Int? {
+        val mask = c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() } ?: return null
+        val m = bounds(mask)
+        var best: Int? = null
+        fun walk(n: AccessibilityNodeInfo?, d: Int) {
+            if (n == null || d > 30 || best != null) return
+            val desc = n.contentDescription?.toString().orEmpty()
+            if (desc.startsWith("Value")) {
+                val r = bounds(n)
+                if (r.centerY() in (m.top - 70)..(m.bottom + 20)) best = Regex("(\\d+)").find(desc)?.value?.toIntOrNull()
+            }
+            for (i in 0 until n.childCount) walk(n.getChild(i), d + 1)
+        }
+        walk(root, 0)
+        return best
+    }
+
+    private fun readState(root: AccessibilityNodeInfo, c: VehicleControl): Int? = when (c.kind) {
+        VehicleControl.Kind.TABS -> tabs(root, c).indexOfFirst { it.isSelected || it.parent?.isSelected == true }.takeIf { it >= 0 }
+        else -> sliderPercent(root, c)?.let { p -> c.percents.indices.minByOrNull { abs(c.percents[it] - p) } }
+    }
+
+    // ---------------- hərəkət ----------------
+    private fun clickNode(n: AccessibilityNodeInfo): Boolean {
+        val ok = generateSequence(n) { it.parent }.firstOrNull { it.isClickable }?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        if (!ok) { val r = bounds(n); tap(r.exactCenterX(), r.exactCenterY()) }
+        return ok
+    }
+
+    private fun act(root: AccessibilityNodeInfo, c: VehicleControl, index: Int) {
+        when (c.kind) {
+            VehicleControl.Kind.TABS -> tabs(root, c).getOrNull(index)?.let { clickNode(it) }
+            VehicleControl.Kind.MASKS -> c.maskIds.getOrNull(index)?.takeIf { it.isNotBlank() }
+                ?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() }?.let { clickNode(it) }
+                ?: tapSlider(root, c, index)
+            VehicleControl.Kind.SLIDER -> {
+                val m = c.maskIds.getOrNull(index)?.takeIf { it.isNotBlank() }
+                    ?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() }
+                if (m != null) clickNode(m) else tapSlider(root, c, index)
+            }
+        }
+        Log.i("Q07DRIVE", "act $c -> $index")
+    }
+
+    private fun tapSlider(root: AccessibilityNodeInfo, c: VehicleControl, index: Int) {
+        val mask = c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() } ?: return
+        val r = bounds(mask)
+        val pad = r.height() / 2f
+        val pct = (c.percents.getOrNull(index) ?: 50) / 100f
+        tap(r.left + pad + pct * (r.width() - 2 * pad), r.exactCenterY())
+    }
+
+    private fun tap(x: Float, y: Float) {
+        val p = Path().apply { moveTo(x, y) }
+        runCatching { dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p, 0, 60)).build(), null, null) }
+    }
+
+    /** «Sürüş» səhifəsinə keç; idarəetmə görünmürsə sürüşdür */
+    private fun navigate(root: AccessibilityNodeInfo) {
         val now = System.currentTimeMillis()
         if (now - navAt < 900) return
         navAt = now
         navTries++
-        val menu = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/item_menu_txt")
-            .sortedBy { val r = Rect(); it.getBoundsInScreen(r); r.top }
-        val drive = menu.firstOrNull { val t = it.text?.toString().orEmpty(); t.startsWith("Sürüş") || t.contains("驾驶") || t.startsWith("Driv") }
-            ?: menu.getOrNull(3)
-        val onDrive = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/v_tab_drive_mode_mask").isNotEmpty()
-        if (!onDrive && drive != null) {
-            val ok = generateSequence(drive) { it.parent }.firstOrNull { it.isClickable }
-                ?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-            if (!ok) { val r = Rect(); drive.getBoundsInScreen(r); tap(r.exactCenterX(), r.exactCenterY()) }
-            Log.i("Q07DRIVE", "nav -> Sürüş ok=$ok")
+        val onDrive = root.findAccessibilityNodeInfosByViewId(id("v_tab_drive_mode_mask")).isNotEmpty() ||
+            root.findAccessibilityNodeInfosByViewId(id("tv_title_power_steering")).isNotEmpty()
+        if (!onDrive) {
+            val menu = root.findAccessibilityNodeInfosByViewId(id("item_menu_txt")).sortedBy { bounds(it).top }
+            val drive = menu.firstOrNull { val t = it.text?.toString().orEmpty(); t.startsWith("Sürüş") || t.contains("驾驶") || t.startsWith("Driv") }
+                ?: menu.getOrNull(3)
+            drive?.let { clickNode(it) }
+            Log.i("Q07DRIVE", "nav -> Sürüş")
             return
         }
-        // Sürüş səhifəsindəyik, amma bu qrup görünmür — sürüşdür
         val scrollables = mutableListOf<AccessibilityNodeInfo>()
         fun walk(n: AccessibilityNodeInfo?, d: Int) {
             if (n == null || d > 25) return
-            if (n.isScrollable) { val r = Rect(); n.getBoundsInScreen(r); if (r.left > 400) scrollables += n }
+            if (n.isScrollable && bounds(n).left > 400) scrollables += n
             for (i in 0 until n.childCount) walk(n.getChild(i), d + 1)
         }
         walk(root, 0)
         val action = if (navTries % 4 < 2) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
         scrollables.forEach { it.performAction(action) }
-        Log.i("Q07DRIVE", "scroll ${g.name} n=${scrollables.size} try=$navTries")
-    }
-
-    private fun tap(x: Float, y: Float) {
-        val p = android.graphics.Path().apply { moveTo(x, y) }
-        runCatching {
-            dispatchGesture(
-                android.accessibilityservice.GestureDescription.Builder()
-                    .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(p, 0, 60)).build(), null, null
-            )
-        }
-    }
-
-    private fun selected(tabs: List<AccessibilityNodeInfo>) =
-        tabs.indexOfFirst { it.isSelected || it.parent?.isSelected == true }
-
-    private fun findTabs(root: AccessibilityNodeInfo, g: TabGroup): List<AccessibilityNodeInfo> {
-        val mask = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/${g.maskId}").firstOrNull() ?: return emptyList()
-        val mr = Rect(); mask.getBoundsInScreen(mr)
-        return root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/tv_tab_content")
-            .filter { val r = Rect(); it.getBoundsInScreen(r); r.centerY() in mr.top..mr.bottom }
-            .sortedBy { val r = Rect(); it.getBoundsInScreen(r); r.left }
-            .takeIf { it.size == g.names.size } ?: emptyList()
+        Log.i("Q07DRIVE", "scroll n=${scrollables.size} try=$navTries")
     }
 
     private fun readTyres(root: AccessibilityNodeInfo) {
-        fun t(id: String) = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.HOME}:id/$id").firstOrNull()?.text?.toString()
+        fun t(x: String) = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.HOME}:id/$x").firstOrNull()?.text?.toString()
         val fl = t("tv_left_top_tyre_pressure") ?: return
         val fr = t("tv_right_top_tyre_pressure") ?: return
         val rl = t("tv_left_bottom_tyre_pressure") ?: return
         val rr = t("tv_right_bottom_tyre_pressure") ?: return
-        val unit = t("tv_left_top_unit") ?: "bar"
-        FactoryBridge.reportTyres(Tyres(fl, fr, rl, rr, unit, System.currentTimeMillis()))
+        FactoryBridge.reportTyres(Tyres(fl, fr, rl, rr, t("tv_left_top_unit") ?: "bar", System.currentTimeMillis()))
     }
 }
