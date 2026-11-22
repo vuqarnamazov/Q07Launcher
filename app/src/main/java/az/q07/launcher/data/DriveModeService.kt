@@ -251,6 +251,9 @@ class DriveModeService : AccessibilityService() {
                 val found = find(root, j.control)
                 if (found == null || !found.isVisibleToUser) { navigate(root); return }
                 val target = j.index ?: run { FactoryBridge.finish(j, null); return }
+                if (isBlocked(root, j.control)) {
+                    FactoryBridge.finish(j, "${j.control.title}: maşın indi dəyişməyə icazə vermir (P-də yoxla)"); return
+                }
                 val state = readState(root, j.control)
                 if (state == target) {
                     FactoryBridge.finish(j, "${VehicleQuickControlHelper.label(j.control, target)} seçildi"); return
@@ -324,27 +327,52 @@ class DriveModeService : AccessibilityService() {
         return ok
     }
 
+    /** Sürgü üzərindəki maska kliklənəndirsə — zavod onu bloklayıb (məs. sürüş zamanı) */
+    private fun isBlocked(root: AccessibilityNodeInfo, c: VehicleControl): Boolean {
+        if (c.kind == VehicleControl.Kind.TABS) return false
+        val mask = c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() } ?: return false
+        return mask.isClickable
+    }
+
+    private fun sliderNode(root: AccessibilityNodeInfo, c: VehicleControl): AccessibilityNodeInfo? {
+        val sid = c.sliderMaskId?.removePrefix("v_")?.removeSuffix("_mask") ?: return null
+        return root.findAccessibilityNodeInfosByViewId(id(sid)).firstOrNull()
+    }
+
     private fun act(root: AccessibilityNodeInfo, c: VehicleControl, index: Int) {
         when (c.kind) {
             VehicleControl.Kind.TABS -> tabs(root, c).getOrNull(index)?.let { clickNode(it) }
-            VehicleControl.Kind.MASKS -> c.maskIds.getOrNull(index)?.takeIf { it.isNotBlank() }
-                ?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() }?.let { clickNode(it) }
-                ?: tapSlider(root, c, index)
-            VehicleControl.Kind.SLIDER -> {
-                val m = c.maskIds.getOrNull(index)?.takeIf { it.isNotBlank() }
-                    ?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() }
-                if (m != null) clickNode(m) else tapSlider(root, c, index)
+            else -> {
+                val pct = c.percents.getOrNull(index) ?: 50
+                val slider = sliderNode(root, c)
+                // 1) əlçatanlıq API ilə dəqiq dəyər (dəstəklənirsə)
+                val ri = slider?.rangeInfo
+                val ok = if (slider != null && ri != null) {
+                    val v = ri.min + (ri.max - ri.min) * pct / 100f
+                    slider.performAction(
+                        AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+                        android.os.Bundle().apply { putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, v) }
+                    )
+                } else false
+                // 2) əks halda barmaqla sürüşdür: cari düymədən hədəf nöqtəyə
+                if (!ok) dragSlider(root, c, slider, pct)
             }
         }
         Log.i("Q07DRIVE", "act $c -> $index")
     }
 
-    private fun tapSlider(root: AccessibilityNodeInfo, c: VehicleControl, index: Int) {
-        val mask = c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() } ?: return
-        val r = bounds(mask)
-        val pad = r.height() / 2f
-        val pct = (c.percents.getOrNull(index) ?: 50) / 100f
-        tap(r.left + pad + pct * (r.width() - 2 * pad), r.exactCenterY())
+    private fun dragSlider(root: AccessibilityNodeInfo, c: VehicleControl, slider: AccessibilityNodeInfo?, pct: Int) {
+        val base = slider ?: c.sliderMaskId?.let { root.findAccessibilityNodeInfosByViewId(id(it)).firstOrNull() } ?: return
+        val r = bounds(base)
+        val pad = r.height() * 0.78f
+        val y = r.top + r.height() * 0.42f
+        val cur = sliderPercent(root, c) ?: 50
+        val fromX = r.left + pad + cur / 100f * (r.width() - 2 * pad)
+        val toX = r.left + pad + pct / 100f * (r.width() - 2 * pad)
+        val p = Path().apply { moveTo(fromX, y); lineTo(toX, y) }
+        runCatching {
+            dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p, 0, 450)).build(), null, null)
+        }
     }
 
     private fun tap(x: Float, y: Float) {
