@@ -45,8 +45,10 @@ enum class VehicleControl(
         sliderMaskId = "v_slider_power_steering_recycler_mask", percents = listOf(0, 50, 100)
     ),
     BRAKE_MODE(
-        "Əyləc rejimi", Kind.TABS, "tv_title_break_mode",
-        listOf("Komfort", "Standart", "Sport") // real adlar ekrandan oxunur (FactoryBridge.labels)
+        "Əyləc rejimi", Kind.MASKS, "tv_title_break_mode",
+        listOf("Komfort", "Standart", "İdman"),
+        maskIds = listOf("v_break_mode_comfort_mask", "v_break_mode_weak_mask", "v_break_mode_motion_mask"),
+        sliderMaskId = "v_slider_break_mode_recycler_mask", percents = listOf(0, 50, 100)
     );
 
     enum class Kind { TABS, SLIDER, MASKS }
