@@ -143,6 +143,16 @@ object ObdMonitor {
     private val _state = MutableStateFlow(ObdState())
     val state: StateFlow<ObdState> = _state
 
+    private var permanent = false
+
+    /** Proses yaşadıqca daim işləsin (bölmədən asılı olmadan) */
+    @Synchronized
+    fun ensureRunning() {
+        if (permanent) return
+        permanent = true
+        acquire()
+    }
+
     @Synchronized
     fun acquire() {
         users++
@@ -319,7 +329,8 @@ object ObdMonitor {
                 log("1-ci dövr: ${values.size} dəyər, cavabsız: ${misses.keys}")
                 verbose = false
                 while (true) {
-                    if (!AppVisibility.visible) { delay(2000); continue } // launcher gizlidirsə sorğu yox
+                    // launcher arxada olanda da oxu (yan panel, qayıdanda təzə dəyər) — sadəcə daha seyrək
+                    if (!AppVisibility.visible && !SidePanel.showing) delay(700)
                     if (cycle % 600 == 0 && cycle > 0) { unsupported.clear(); misses.clear() }
                     for (pid in fast) if (pid.key !in unsupported) handle(pid, query(link, pid, hdr))
                     // yavaş göstəricilər: rate × 400 ms-dən bir

@@ -144,7 +144,7 @@ class DriveModeService : AccessibilityService() {
     private var cover: ImageView? = null
 
     override fun onServiceConnected() { FactoryBridge.service = this }
-    override fun onDestroy() { hideCover(); FactoryBridge.service = null; super.onDestroy() }
+    override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
     override fun onInterrupt() {}
 
     fun showCover(bmp: Bitmap?, frame: Rect) {
@@ -171,6 +171,12 @@ class DriveModeService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // ön plandakı tətbiq dəyişəndə yan paneli göstər/gizlət
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && FactoryBridge.job == null) {
+            event.packageName?.toString()?.let { SidePanel.onForeground(this, it) }
+        }
+        val pkg = event?.packageName?.toString()
+        if (pkg != FactoryBridge.VS && pkg != FactoryBridge.HOME) return
         val roots = buildList {
             windows?.forEach { w -> w.root?.let { add(it) } }
             rootInActiveWindow?.let { add(it) }

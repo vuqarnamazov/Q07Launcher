@@ -253,3 +253,29 @@ private fun NetworkSetupDialog(onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = onDismiss) { Text("Bağla") } }
     )
 }
+
+/** Bütün bölmələrdə görünən canlı maşın zolağı (sürət, dövr, SOC, 12V, soyuducu) */
+@Composable
+fun LiveCarStrip(modifier: Modifier = Modifier) {
+    val obd by az.q07.launcher.data.ObdMonitor.state.collectAsState()
+    if (obd.values.isEmpty()) return
+    val v = obd.values
+    fun f(k: String, d: Int = 0) = v[k]?.let { if (d == 0) it.toInt().toString() else String.format(java.util.Locale.US, "%.${d}f", it) } ?: "—"
+    val items = listOf(
+        "km/s" to f("speed"), "rpm" to f("rpm"), "SOC %" to f("soc", 1), "12V" to f("voltage", 1), "Soyuducu °C" to f("coolant")
+    )
+    androidx.compose.foundation.layout.Row(
+        modifier.fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .background(CarColors.PanelAlt)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        items.forEach { (label, value) ->
+            androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                Text(value, fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = CarColors.TextPrimary, maxLines = 1)
+                Text(label, fontSize = 10.sp, color = CarColors.TextSecondary, maxLines = 1)
+            }
+        }
+    }
+}

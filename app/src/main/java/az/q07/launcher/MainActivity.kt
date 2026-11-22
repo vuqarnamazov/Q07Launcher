@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         LauncherPrefs.init(applicationContext)
         DualNetworkManager.init(applicationContext)
         WidgetStore.init(applicationContext)
+        az.q07.launcher.data.ObdMonitor.ensureRunning()
         ReminderScheduler.createChannel(applicationContext)
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
@@ -80,14 +81,11 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         AppVisibility.visible = true
         runCatching { WidgetStore.host.startListening() }
-        // OBD oxuma launcher görünən müddətdə həmişə işləsin (yalnız Maşın kartında yox)
-        az.q07.launcher.data.ObdMonitor.acquire()
     }
 
     override fun onStop() {
         AppVisibility.visible = false
         runCatching { WidgetStore.host.stopListening() }
-        az.q07.launcher.data.ObdMonitor.release()
         super.onStop()
     }
 

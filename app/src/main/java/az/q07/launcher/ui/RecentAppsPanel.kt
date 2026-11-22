@@ -47,8 +47,9 @@ fun RecentAppsPanel(apps: List<AppEntry>?, modifier: Modifier = Modifier) {
     PanelSurface(modifier) {
         Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Açdığım proqramlar", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
+            LiveCarStrip()
             Text(
-                "Toxun — proqram sağda açılır, soldakı menyu görünür qalır. Uzun bas — siyahıdan sil.",
+                "Toxun — proqram açılır, soldakı menyu (saat, dock, maşın göstəriciləri) görünür qalır. Uzun bas — siyahıdan sil.",
                 fontSize = 13.sp, color = CarColors.TextSecondary
             )
             if (list.isEmpty()) {
@@ -71,7 +72,10 @@ fun RecentAppsPanel(apps: List<AppEntry>?, modifier: Modifier = Modifier) {
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(CarColors.PanelAlt)
                                 .combinedClickable(
-                                    onClick = { AppRepository.launch(context, app, WindowLauncher.Area.BESIDE_DOCK) },
+                                    onClick = {
+                                        az.q07.launcher.data.SidePanel.panelPackages.add(app.packageName)
+                                        AppRepository.launch(context, app, WindowLauncher.Area.FULL)
+                                    },
                                     onLongClick = { RecentApps.remove(context, app.key) }
                                 )
                                 .padding(12.dp),

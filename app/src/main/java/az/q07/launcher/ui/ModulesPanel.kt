@@ -65,7 +65,9 @@ private fun TabsMode() {
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         NetworkStatusBar()
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+        LiveCarStrip()
+        Spacer(Modifier.height(8.dp))
         GlowingFlowNavigationBar(
             items = modules.map { CarMenuItem(title = it.shortTitle, icon = it.icon, glow =
                 if (AppSettings.glowMode == "slot") it.accent else null) },
