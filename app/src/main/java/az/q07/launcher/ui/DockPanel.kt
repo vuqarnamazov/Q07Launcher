@@ -67,6 +67,12 @@ import az.q07.launcher.data.MediaRepo
 import az.q07.launcher.data.QuickActions
 import az.q07.launcher.data.WeatherRepo
 import az.q07.launcher.data.rememberHomeController
+import az.q07.launcher.ui.theme.AnalogClock
+import az.q07.launcher.ui.theme.Look
+import az.q07.launcher.ui.theme.Sparkline
+import az.q07.launcher.ui.theme.WaveBars
+import az.q07.launcher.data.ObdMonitor
+import androidx.compose.runtime.mutableStateListOf
 import az.q07.launcher.ui.theme.CarColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -355,6 +361,18 @@ private fun ClockBlock(big: Boolean, compact: Boolean = false) {
     val dateFmt = remember(big) { SimpleDateFormat(if (big) "EEEE, d MMMM" else "EEE, d MMM", locale) }
     val date = Date(now)
 
+    if (big && Look.analogClock) {
+        // Klassik / Modern / Elegant: analoq saat + tarix, Elegant-də səs dalğası
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            AnalogClock(if (compact) 96.dp else 128.dp)
+            Text(timeFmt.format(date), fontSize = 22.sp, color = CarColors.TextPrimary)
+            val temp = if (weather.ok) "  ·  " + Math.round(weather.temp) + "°C" else ""
+            Text(dateFmt.format(date).replaceFirstChar { it.titlecase(locale) } + temp, fontSize = 14.sp,
+                color = CarColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (Look.elegant) WaveBars(Modifier.fillMaxWidth().height(34.dp).padding(top = 6.dp))
+        }
+        return
+    }
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
@@ -382,6 +400,15 @@ private fun ClockBlock(big: Boolean, compact: Boolean = false) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        if (big && Look.future) {
+            val obd by ObdMonitor.state.collectAsState()
+            val hist = remember { mutableStateListOf<Double>() }
+            LaunchedEffect(obd.values["speed"], obd.values["soc"]) {
+                hist.add(obd.values["speed"] ?: obd.values["soc"] ?: return@LaunchedEffect)
+                while (hist.size > 40) hist.removeAt(0)
+            }
+            Sparkline(hist.toList(), CarColors.Accent, Modifier.fillMaxWidth().height(30.dp).padding(top = 6.dp))
+        }
     }
 }
 

@@ -51,7 +51,27 @@ private fun carDarkScheme() = darkColorScheme(
     error = CarColors.Danger,
 )
 
+private fun serifTypography(): androidx.compose.material3.Typography {
+    val t = androidx.compose.material3.Typography()
+    val f = androidx.compose.ui.text.font.FontFamily.Serif
+    return t.copy(
+        displayLarge = t.displayLarge.copy(fontFamily = f), displayMedium = t.displayMedium.copy(fontFamily = f),
+        displaySmall = t.displaySmall.copy(fontFamily = f), headlineLarge = t.headlineLarge.copy(fontFamily = f),
+        headlineMedium = t.headlineMedium.copy(fontFamily = f), headlineSmall = t.headlineSmall.copy(fontFamily = f),
+        titleLarge = t.titleLarge.copy(fontFamily = f), titleMedium = t.titleMedium.copy(fontFamily = f),
+        titleSmall = t.titleSmall.copy(fontFamily = f), bodyLarge = t.bodyLarge.copy(fontFamily = f),
+        bodyMedium = t.bodyMedium.copy(fontFamily = f), bodySmall = t.bodySmall.copy(fontFamily = f),
+        labelLarge = t.labelLarge.copy(fontFamily = f), labelMedium = t.labelMedium.copy(fontFamily = f),
+        labelSmall = t.labelSmall.copy(fontFamily = f),
+    )
+}
+
 @Composable
 fun CarLauncherTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (CarColors.theme.isLight) carLightScheme() else carDarkScheme(), content = content)
+    val klassik = az.q07.launcher.data.AppSettings.launcherTheme == LauncherTheme.KLASSIK
+    MaterialTheme(
+        colorScheme = if (CarColors.theme.isLight) carLightScheme() else carDarkScheme(),
+        typography = if (klassik) serifTypography() else androidx.compose.material3.Typography(),
+        content = content
+    )
 }
