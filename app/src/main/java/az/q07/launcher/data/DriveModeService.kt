@@ -186,6 +186,9 @@ class DriveModeService : AccessibilityService() {
 
     // ---------------- hadisələr ----------------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // İzləmə Skaneri: kliklər və pəncərə keçidləri (skaner sönülüdürsə yalnız ön plan izlənir)
+        if (event != null) runCatching { az.q07.launcher.scanner.RecorderScannerManager.onEvent(this, event) }
+        if (event?.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) return
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val p = event.packageName?.toString()
             if (p != null && p != lastFg) { lastFg = p; SelfDiag.log("fg", p) }
@@ -252,6 +255,10 @@ class DriveModeService : AccessibilityService() {
         main.removeCallbacks(poller)
         main.postDelayed(poller, 400)
     }
+
+    /** İzləmə Skaneri / FlowPlayer üçün: bütün pəncərələrin kök düyünləri və toxunuş */
+    fun scannerRoots(): List<AccessibilityNodeInfo> = roots()
+    fun scannerTap(x: Float, y: Float) = tap(x, y)
 
     private fun roots(): List<AccessibilityNodeInfo> = buildList {
         windows?.forEach { w -> w.root?.let { add(it) } }

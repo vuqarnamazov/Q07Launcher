@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         ReminderScheduler.createChannel(applicationContext)
+        // İzləmə Skaneri: bazalar + əvvəl aktiv idisə xidməti bərpa et
+        az.q07.launcher.scanner.RecorderScannerManager.restoreIfNeeded(applicationContext)
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

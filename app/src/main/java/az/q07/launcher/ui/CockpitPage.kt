@@ -117,6 +117,8 @@ private fun CockpitSideStrip(modifier: Modifier) {
                 val homes = QuickActions.findOtherHomes(context)
                 if (homes.isNotEmpty()) QuickActions.launchHome(context, homes.first()) else QuickActions.openHomeSettings(context)
             }
+            // İzləmə Skaneri — sürətli paneldə Aktiv / Sönülü düyməsi
+            az.q07.launcher.modules.ScannerToggleButton(compact = true)
             Spacer(Modifier.height(6.dp))
             LiveMini()
         }
