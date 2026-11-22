@@ -35,15 +35,37 @@ object SidePanel {
     private val main = Handler(Looper.getMainLooper())
     private var ticker: Runnable? = null
 
+    @Volatile private var lastPkg: String? = null
+
+    /** Launcher-dən açılmış tətbiq hazırda sağda freeform pəncərədə görünürmü */
+    private fun freeformOnTop(service: DriveModeService): Boolean = runCatching {
+        val r = android.graphics.Rect()
+        service.windows.any { w ->
+            if (w.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) return@any false
+            w.getBoundsInScreen(r)
+            val p = w.root?.packageName?.toString()
+            p != null && p != service.packageName && p in panelPackages && r.left > 100
+        }
+    }.getOrDefault(false)
+
     fun onForeground(service: DriveModeService, pkg: String) {
+        if (pkg != "com.android.systemui" && !pkg.startsWith("com.incall.apps.hmi")) lastPkg = pkg
         when {
-            pkg == service.packageName || pkg == FactoryBridge.HOME -> hide(service)
+            // freeform açılanda launcher-in özünün də hadisəsi gəlir — pəncərə hələ sağdadırsa panel qalır
+            pkg == service.packageName || pkg == FactoryBridge.HOME ->
+                if (freeformOnTop(service)) show(service) else hide(service)
             // Changan freeform pəncərəsi açılanda sistem arxadakı launcher-i gizlədir (səth silinir, sol tərəf qara qalır),
             // ona görə sol panel həmişə xüsusi imkan qatı kimi çəkilir
             pkg in panelPackages -> show(service)
             pkg == "com.android.systemui" || pkg.startsWith("com.incall.apps.hmi") -> Unit
-            else -> hide(service)
+            else -> if (!freeformOnTop(service)) hide(service)
         }
+    }
+
+    /** Pəncərələr dəyişəndə (freeform bağlandı/açıldı) paneli yenilə */
+    fun onWindowsChanged(service: DriveModeService) {
+        if (freeformOnTop(service)) { show(service); return }
+        if (showing && lastPkg !in panelPackages) hide(service)
     }
 
     private fun dp(c: Context, v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.resources.displayMetrics).toInt()

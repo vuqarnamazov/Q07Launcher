@@ -54,6 +54,7 @@ object WindowLauncher {
         private set
 
     fun registerFreeform(pkg: String): Boolean {
+        SidePanel.panelPackages.add(pkg)
         if (pkg in registered) return true
         return runCatching {
             val wmg = Class.forName("android.view.WindowManagerGlobal")

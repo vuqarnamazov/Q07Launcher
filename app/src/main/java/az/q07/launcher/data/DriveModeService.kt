@@ -192,6 +192,9 @@ class DriveModeService : AccessibilityService() {
             if (FactoryBridge.job == null && p != null) SidePanel.onForeground(this, p)
             if (p == FactoryBridge.HOME) homeGuard(event.className?.toString())
         }
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED && FactoryBridge.job == null) {
+            main.removeCallbacks(windowsCheck); main.postDelayed(windowsCheck, 250)
+        }
         val pkg = event?.packageName?.toString()
         if (pkg != FactoryBridge.VS && pkg != FactoryBridge.HOME) return
         process()
@@ -204,10 +207,14 @@ class DriveModeService : AccessibilityService() {
     private var isDefaultCached = false
     private val guardHits = ArrayDeque<Long>()
 
+    private val windowsCheck = Runnable { SidePanel.onWindowsChanged(this) }
+    private var lastGuardAt = 0L
+
     private fun homeGuard(cls: String?) {
         if (cls == null || !cls.contains("model_main")) return
         if (FactoryBridge.job != null) return
         val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastGuardAt < 1500) return
         if (now - QuickActions.factoryOpenedAt < 20_000) return
         if (now - defaultCheckedAt > 5_000) {
             isDefaultCached = runCatching { HomeMode.isDefault(this) }.getOrDefault(false); defaultCheckedAt = now
@@ -215,7 +222,7 @@ class DriveModeService : AccessibilityService() {
         if (!isDefaultCached) return
         while (guardHits.isNotEmpty() && now - guardHits.first() > 30_000) guardHits.removeFirst()
         if (guardHits.size >= 4) return // dövrəyə düşməsin
-        guardHits.addLast(now)
+        guardHits.addLast(now); lastGuardAt = now
         SelfDiag.log("homeguard", "zavod ekranı özbaşına açıldı → Q07-yə qayıdış")
         main.postDelayed({
             runCatching {
