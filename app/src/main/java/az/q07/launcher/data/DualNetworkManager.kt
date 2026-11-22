@@ -208,9 +208,20 @@ object DualNetworkManager {
             obdStatus = "Qoşulub ✓"
             if (AppSettings.obdMode != "wifi") AppSettings.update { obdMode = "wifi" }
             ObdMonitor.restart()
+            // sistem artıq OBD-dədir: təsdiq pəncərəsi çıxarmamaq üçün əlavə sorğu vermirik
+            obdWanted = true
+            return
+        }
+        obdWanted = true
+        // adapter görünmürsə (maşın söndürülüb) — sorğu verib təsdiq pəncərəsi çıxarma, sakitcə gözlə
+        if (!obdVisibleInScan(ssid)) {
+            releaseRequest()
+            obdStatus = "OBD adapteri görünmür"
+            retryCount = maxOf(retryCount, 3)
+            scheduleRetry("OBD adapteri görünmür")
+            return
         }
         releaseRequest()
-        obdWanted = true
         retryCount = 0
 
         val spec = WifiNetworkSpecifier.Builder().apply {
@@ -329,6 +340,16 @@ object DualNetworkManager {
     private var retryCount = 0
 
     /** OBD itəndə özü yenidən qoşulur (5 san → 15 san → 30 san…), istifadəçidən heç nə istəmədən */
+    /** Son Wi-Fi skanında OBD şəbəkəsi var? (skan nəticəsi oxuna bilmirsə — true, köhnə davranış) */
+    private fun obdVisibleInScan(ssid: String): Boolean = runCatching {
+        val wm = wifi
+        @Suppress("DEPRECATION") wm.startScan()
+        val results = wm.scanResults
+        if (results.isNullOrEmpty()) return@runCatching true
+        val rx = Regex(toAndroidGlob(ssid))
+        results.any { r -> r.SSID == ssid || rx.matches(r.SSID) }
+    }.getOrDefault(true)
+
     private fun scheduleRetry(reason: String) {
         if (!obdWanted || wifiPriority != "obd") { obdStatus = reason; return }
         retryCount++

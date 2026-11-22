@@ -290,9 +290,13 @@ class DriveModeService : AccessibilityService() {
                 ?.also { SelfDiag.log("selfheal", "${c.name}: id tapılmadı, başlıq mətni ilə tapıldı") }
         } ?: return emptyList()
         val a = bounds(anchor)
-        val list = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
+        val below = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
             .filter { val r = bounds(it); r.top >= a.bottom - 4 && r.top <= a.bottom + 260 }
+        // yalnız başlığın altındakı İLK sıra (eyni hündürlük), seçim sayı qədər
+        val firstTop = below.minOfOrNull { bounds(it).top } ?: return emptyList()
+        val list = below.filter { abs(bounds(it).top - firstTop) < 24 }
             .sortedBy { bounds(it).left }
+            .take(c.options.size)
         if (list.isNotEmpty()) FactoryBridge.reportLabels(c, list.map { it.text?.toString().orEmpty() })
         return list
     }
