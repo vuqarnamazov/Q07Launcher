@@ -38,7 +38,7 @@ object SidePanel {
     @Volatile private var lastPkg: String? = null
 
     /** Launcher-dən açılmış tətbiq hazırda sağda freeform pəncərədə görünürmü */
-    private fun freeformOnTop(service: DriveModeService): Boolean = runCatching {
+    fun freeformOnTop(service: DriveModeService): Boolean = runCatching {
         val r = android.graphics.Rect()
         service.windows.any { w ->
             if (w.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) return@any false

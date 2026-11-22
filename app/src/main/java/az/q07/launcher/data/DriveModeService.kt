@@ -215,6 +215,8 @@ class DriveModeService : AccessibilityService() {
         if (FactoryBridge.job != null) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastGuardAt < 1500) return
+        // freeform tətbiq açılanda Changan sistemi zavod launcher-ini arxa fona özü gətirir — o zaman toxunmuruq
+        if (now - WindowLauncher.lastLaunchAt < 5_000 || SidePanel.freeformOnTop(this)) return
         if (now - QuickActions.factoryOpenedAt < 20_000) return
         if (now - defaultCheckedAt > 5_000) {
             isDefaultCached = runCatching { HomeMode.isDefault(this) }.getOrDefault(false); defaultCheckedAt = now

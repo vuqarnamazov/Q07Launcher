@@ -55,6 +55,7 @@ object WindowLauncher {
 
     fun registerFreeform(pkg: String): Boolean {
         SidePanel.panelPackages.add(pkg)
+        lastLaunchAt = android.os.SystemClock.elapsedRealtime()
         if (pkg in registered) return true
         return runCatching {
             val wmg = Class.forName("android.view.WindowManagerGlobal")
@@ -73,7 +74,11 @@ object WindowLauncher {
         }
     }
 
+    /** Son pəncərə açılışı — bu zaman sistem zavod launcher-ini arxaya özü gətirir, HomeGuard toxunmamalıdır */
+    @Volatile var lastLaunchAt = 0L
+
     fun launch(context: Context, component: ComponentName, area: Area): Boolean {
+        lastLaunchAt = android.os.SystemClock.elapsedRealtime()
         if (area != Area.FULL) registerFreeform(component.packageName)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
