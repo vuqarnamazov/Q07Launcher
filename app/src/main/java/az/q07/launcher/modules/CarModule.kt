@@ -115,7 +115,7 @@ object CarModule : LauncherModule {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            DriveModeBar()
+            // Rejim düymələri və təkər təzyiqi yalnız 1-ci ekranda (kokpit) — burada yalnız OBD göstəriciləri
             CarFactoryWidgets()
             TileGrid(ObdPids.all.filter { it.key in mainKeys + secondKeys }
                 .sortedBy { (mainKeys + secondKeys).indexOf(it.key) }, obd.values)

@@ -112,9 +112,14 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                                         modifier = Modifier.weight(0.58f).fillMaxHeight())
                                     AppsPanel(apps, columns = 3, Modifier.weight(0.42f).fillMaxHeight())
                                 }
-                                page <= 1 -> {
+                                page == 0 -> {
+                                    // təhlükəsiz rejim: kokpit yoxdur — modullar + tətbiqlər
                                     ModulesPanel(Modifier.weight(0.46f).fillMaxHeight())
                                     AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.54f).fillMaxHeight())
+                                }
+                                page == 1 -> {
+                                    // tətbiqlər yalnız 1-ci səhifədə; burada modullar bütün eni tutur
+                                    ModulesPanel(Modifier.fillMaxSize())
                                 }
                                 else -> RecentAppsPanel(apps, Modifier.fillMaxSize())
                             }

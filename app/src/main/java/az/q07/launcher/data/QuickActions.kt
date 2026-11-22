@@ -24,8 +24,11 @@ object QuickActions {
         (intent.component?.packageName ?: intent.`package`
             ?: intent.resolveActivity(context.packageManager)?.packageName)
             ?.takeIf { it != context.packageName && it != FactoryBridge.HOME && intent.categories?.contains(Intent.CATEGORY_HOME) != true }
-            ?.let { SidePanel.panelPackages.add(it) }
-        context.startActivity(intent)
+            ?.let { SidePanel.panelPackages.add(it); WindowLauncher.registerFreeform(it) }
+        val b = if (intent.categories?.contains(Intent.CATEGORY_HOME) == true) null
+                else WindowLauncher.bounds(context, WindowLauncher.Area.BESIDE_DOCK)
+        if (b != null) context.startActivity(intent, android.app.ActivityOptions.makeBasic().setLaunchBounds(b).toBundle())
+        else context.startActivity(intent)
         true
     } catch (e: ActivityNotFoundException) {
         false

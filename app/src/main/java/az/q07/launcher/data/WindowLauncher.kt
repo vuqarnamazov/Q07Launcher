@@ -32,14 +32,48 @@ object WindowLauncher {
         val h = dm.heightPixels
         return when (area) {
             Area.FULL -> null
-            Area.BESIDE_DOCK -> Rect(if (dockRightPx > 0) dockRightPx else (w * DOCK_FRACTION).toInt(), 0, w, h)
+            // zavodun öz çərçivəsi kimi: üst zolaq 112px, alt iqlim zolağından yuxarı, sağda 32px boşluq
+            Area.BESIDE_DOCK -> Rect(
+                if (dockRightPx > 0) dockRightPx else (w * DOCK_FRACTION).toInt(),
+                (h * 0.07f).toInt(), w - (w * 0.0125f).toInt(), (h * 0.88f).toInt()
+            )
             Area.LEFT_HALF -> Rect(0, 0, w / 2, h)
             Area.RIGHT_HALF -> Rect(w / 2, 0, w, h)
             Area.CENTER -> Rect((w * 0.15f).toInt(), (h * 0.08f).toInt(), (w * 0.85f).toInt(), (h * 0.92f).toInt())
         }
     }
 
+    /**
+     * Changan sistemi (services.jar, ActivityStarter.isStartFullScreen) kənar tətbiqləri tam ekran açır,
+     * yalnız «freeform siyahısındakı» paketləri pəncərədə açır. Siyahıya əlavə etmək üçün sistemin öz
+     * IWindowManager.setApplicationFullScreenForRuntime(paket, true) metodu var (zavod launcher-i istifadə edir).
+     * Qeyd: siyahı yenidən yüklənmədə sıfırlanır — hər açılışda yenidən çağırılır.
+     */
+    private val registered = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    @Volatile var freeformWorks: Boolean? = null
+        private set
+
+    fun registerFreeform(pkg: String): Boolean {
+        if (pkg in registered) return true
+        return runCatching {
+            val wmg = Class.forName("android.view.WindowManagerGlobal")
+            val wms = org.lsposed.hiddenapibypass.HiddenApiBypass.invoke(wmg, null, "getWindowManagerService")
+            org.lsposed.hiddenapibypass.HiddenApiBypass.invoke(
+                Class.forName("android.view.IWindowManager"), wms, "setApplicationFullScreenForRuntime", pkg, true
+            )
+            registered += pkg
+            freeformWorks = true
+            SelfDiag.log("window", "freeform siyahısına əlavə: $pkg")
+            true
+        }.getOrElse {
+            freeformWorks = false
+            SelfDiag.log("window", "freeform qeydiyyatı alınmadı: $pkg — $it")
+            false
+        }
+    }
+
     fun launch(context: Context, component: ComponentName, area: Area): Boolean {
+        if (area != Area.FULL) registerFreeform(component.packageName)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
             .setComponent(component)
@@ -73,5 +107,5 @@ object WindowLauncher {
     }
 
     /** Launcher-dən adi açılış: kompakt rejimdə tətbiq launcher-in sağında pəncərədə açılır */
-    fun defaultArea(): Area = if (AppSettings.compactMode) Area.BESIDE_DOCK else Area.FULL
+    fun defaultArea(): Area = Area.BESIDE_DOCK
 }

@@ -74,7 +74,7 @@ fun RecentAppsPanel(apps: List<AppEntry>?, modifier: Modifier = Modifier) {
                                 .combinedClickable(
                                     onClick = {
                                         az.q07.launcher.data.SidePanel.panelPackages.add(app.packageName)
-                                        AppRepository.launch(context, app, WindowLauncher.Area.FULL)
+                                        AppRepository.launch(context, app, WindowLauncher.Area.BESIDE_DOCK)
                                     },
                                     onLongClick = { RecentApps.remove(context, app.key) }
                                 )
