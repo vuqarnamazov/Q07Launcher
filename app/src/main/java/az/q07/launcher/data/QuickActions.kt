@@ -20,6 +20,11 @@ object QuickActions {
 
     fun start(context: Context, intent: Intent): Boolean = try {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // launcher-dən açılan proqramın solunda launcher paneli qalsın
+        (intent.component?.packageName ?: intent.`package`
+            ?: intent.resolveActivity(context.packageManager)?.packageName)
+            ?.takeIf { it != context.packageName && it != FactoryBridge.HOME && intent.categories?.contains(Intent.CATEGORY_HOME) != true }
+            ?.let { SidePanel.panelPackages.add(it) }
         context.startActivity(intent)
         true
     } catch (e: ActivityNotFoundException) {

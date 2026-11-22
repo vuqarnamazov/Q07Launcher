@@ -85,33 +85,38 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                     }
                 }
             } else if (landscape) {
-                // Telefon kimi səhifələr: sola sürüşdür → 2-ci səhifə (açdığım proqramlar)
-                val pager = rememberPagerState(pageCount = { 3 })
+                // Sol panel (saat + proqramlar) SABİT qalır; sağ hissə telefon kimi səhifələrlə sürüşür
+                val pageCount = 3
+                val pager = rememberPagerState(pageCount = { pageCount })
                 val pagerScope = rememberCoroutineScope()
-                Box(Modifier.fillMaxSize()) {
+                val cockpit = !az.q07.launcher.data.SelfDiag.safeMode
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    DockPanel(
+                        apps.orEmpty(), vertical = true, resumeTick = resumeTick,
+                        modifier = Modifier.weight(0.22f).fillMaxHeight().onGloballyPositioned { c ->
+                            val r = c.boundsInWindow()
+                            val loc = IntArray(2)
+                            (context as? android.app.Activity)?.window?.decorView?.getLocationOnScreen(loc)
+                            az.q07.launcher.data.WindowLauncher.dockRightPx = (r.right + loc[0]).toInt() + 8
+                        }
+                    )
+                Box(Modifier.weight(0.78f).fillMaxHeight()) {
                     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-                        if (page == 0 && !az.q07.launcher.data.SelfDiag.safeMode) {
-                            // Səhifə 0: kokpit (fırlanan avtomobil + idarəetmə)
-                            CockpitPage(apps, onOpenModules = { pagerScope.launch { pager.animateScrollToPage(1) } })
-                        } else Row(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            if (page <= 1) {
-                                DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
-                                ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
-                                AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
-                            } else {
-                                DockPanel(
-                                    apps.orEmpty(), vertical = true, resumeTick = resumeTick,
-                                    modifier = Modifier.weight(0.22f).fillMaxHeight().onGloballyPositioned { c ->
-                                        val r = c.boundsInWindow()
-                                        val loc = IntArray(2)
-                                        (context as? android.app.Activity)?.window?.decorView?.getLocationOnScreen(loc)
-                                        az.q07.launcher.data.WindowLauncher.dockRightPx = (r.right + loc[0]).toInt() + 8
-                                    }
-                                )
-                                RecentAppsPanel(apps, Modifier.weight(0.78f).fillMaxHeight())
+                        Row(Modifier.fillMaxSize().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            when {
+                                page == 0 && cockpit -> {
+                                    CockpitCenter(onOpenModules = { pagerScope.launch { pager.animateScrollToPage(1) } },
+                                        modifier = Modifier.weight(0.58f).fillMaxHeight())
+                                    AppsPanel(apps, columns = 3, Modifier.weight(0.42f).fillMaxHeight())
+                                }
+                                page <= 1 -> {
+                                    ModulesPanel(Modifier.weight(0.46f).fillMaxHeight())
+                                    AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.54f).fillMaxHeight())
+                                }
+                                else -> RecentAppsPanel(apps, Modifier.fillMaxSize())
                             }
                         }
                     }
@@ -128,6 +133,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                             )
                         }
                     }
+                }
                 }
             } else {
                 // Ekran şaquli fırladılanda

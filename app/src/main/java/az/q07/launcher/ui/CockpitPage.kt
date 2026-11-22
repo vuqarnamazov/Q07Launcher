@@ -157,7 +157,7 @@ private fun LiveMini() {
 
 // ---------------------------------------------------------------- mərkəz
 @Composable
-private fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
+internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
     val context = LocalContext.current
     val activity = context as? Activity
     var noteOpen by remember { mutableStateOf(false) }
