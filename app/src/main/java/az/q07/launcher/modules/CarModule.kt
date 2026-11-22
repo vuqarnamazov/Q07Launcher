@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import az.q07.launcher.data.WindowLauncher
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
