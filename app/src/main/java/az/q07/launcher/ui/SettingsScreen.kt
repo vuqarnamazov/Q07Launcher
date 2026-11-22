@@ -195,7 +195,30 @@ private fun SwitchRow(text: String, hint: String?, checked: Boolean, onChange: (
 
 @Composable
 private fun LookSection() {
-    Label("Vurğu rəngi")
+    Label("Mövzu", "Launcher-in bütün rəngləri dəyişir")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        az.q07.launcher.ui.theme.LauncherTheme.entries.forEach { t ->
+            val c = az.q07.launcher.ui.theme.getThemeColors(t)
+            val sel = AppSettings.themeIndex == t.ordinal
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier
+                        .size(width = 96.dp, height = 60.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                        .background(c.background)
+                        .border(if (sel) 3.dp else 1.dp, if (sel) CarColors.Accent else c.border,
+                            androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                        .clickable { AppSettings.update { themeIndex = t.ordinal } },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Aa", fontSize = 20.sp, color = c.textPrimary)
+                }
+                Text(t.title, fontSize = 13.sp, color = if (sel) CarColors.TextPrimary else CarColors.TextSecondary)
+            }
+        }
+    }
+    Spacer(Modifier.height(16.dp))
+    Label("Vurğu rəngi", "Orijinal mövzuda istifadə olunur")
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         AppSettings.accents.forEachIndexed { i, (name, color) ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

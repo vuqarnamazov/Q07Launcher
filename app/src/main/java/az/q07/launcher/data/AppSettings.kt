@@ -38,6 +38,7 @@ object AppSettings {
 
     // Görünüş
     var accentIndex by mutableIntStateOf(0)
+    var themeIndex by mutableIntStateOf(0)          // LauncherTheme.ordinal
     var showSeconds by mutableStateOf(true)
     var uiScalePercent by mutableIntStateOf(100)   // avtomatik miqyasa nisbətən
     var gridColumns by mutableIntStateOf(4)
@@ -68,6 +69,8 @@ object AppSettings {
     // Hava
     var cityIndex by mutableIntStateOf(0)
 
+    val launcherTheme: az.q07.launcher.ui.theme.LauncherTheme
+        get() = az.q07.launcher.ui.theme.LauncherTheme.entries.getOrElse(themeIndex) { az.q07.launcher.ui.theme.LauncherTheme.ORIGINAL }
     val accentColor: Color get() = accents.getOrElse(accentIndex) { accents[0] }.second
     val city: City get() = cities.getOrElse(cityIndex) { cities[0] }
 
@@ -76,6 +79,7 @@ object AppSettings {
         prefs = context.applicationContext.getSharedPreferences("q07_settings", Context.MODE_PRIVATE)
         prefs.run {
             accentIndex = getInt("accent", 0)
+            themeIndex = getInt("theme", 0)
             showSeconds = getBoolean("seconds", true)
             uiScalePercent = getInt("uiScale", 100)
             gridColumns = getInt("gridCols", 4)
@@ -109,6 +113,7 @@ object AppSettings {
     private fun save() {
         prefs.edit()
             .putInt("accent", accentIndex)
+            .putInt("theme", themeIndex)
             .putBoolean("seconds", showSeconds)
             .putInt("uiScale", uiScalePercent)
             .putInt("gridCols", gridColumns)

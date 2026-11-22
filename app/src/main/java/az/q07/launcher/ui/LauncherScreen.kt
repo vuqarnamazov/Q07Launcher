@@ -52,7 +52,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(CarColors.Background)
+            .background(CarColors.BackgroundBrush)
     ) {
         val landscape = maxWidth >= maxHeight
         val longSide = if (landscape) maxWidth.value else maxHeight.value
