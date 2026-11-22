@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.SelfDiag.init(applicationContext)
         az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         az.q07.launcher.data.ObdMonitor.ensureRunning()
+        az.q07.launcher.data.License.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
@@ -69,7 +71,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CarLauncherTheme {
-                LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
+                val lic by az.q07.launcher.data.License.state.collectAsState()
+                if (lic.ok) LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
+                else az.q07.launcher.ui.ActivationScreen()
             }
         }
     }

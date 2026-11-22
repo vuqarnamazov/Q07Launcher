@@ -1,0 +1,43 @@
+name: Lisenziya ver
+
+# Telefondan: GitHub → Actions → "Lisenziya ver" → Run workflow → maşının ekranındakı aktivasiya kodu
+on:
+  workflow_dispatch:
+    inputs:
+      kod:
+        description: "Aktivasiya kodu (maşın ekranındakı 20 simvol, boşluqsuz və ya boşluqla)"
+        required: true
+      qeyd:
+        description: "Qeyd (məs. kimin maşını) — istəyə bağlı"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  issue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kodu yoxla və imzala
+        env:
+          LIC_KEY: ${{ secrets.Q07_LICENSE_KEY }}
+          KOD_IN: ${{ inputs.kod }}
+        run: |
+          KOD=$(echo "$KOD_IN" | tr -d ' -' | tr 'A-F' 'a-f')
+          if ! echo "$KOD" | grep -Eq '^[0-9a-f]{20}$'; then echo "Kod səhvdir: 20 simvol (0-9, a-f) olmalıdır"; exit 1; fi
+          if [ -z "$LIC_KEY" ]; then echo "Q07_LICENSE_KEY secret-i əlavə edilməyib"; exit 1; fi
+          echo "$LIC_KEY" > "$RUNNER_TEMP/k.pem"
+          mkdir -p licenses
+          printf 'Q07L|v1|%s' "$KOD" | openssl dgst -sha256 -sign "$RUNNER_TEMP/k.pem" | base64 -w0 > "licenses/$KOD.lic"
+          rm -f "$RUNNER_TEMP/k.pem"
+          echo "KOD=$KOD" >> "$GITHUB_ENV"
+      - name: Yadda saxla
+        env:
+          QEYD: ${{ inputs.qeyd }}
+        run: |
+          git config user.name "q07-license-bot"
+          git config user.email "q07-license-bot@users.noreply.github.com"
+          git add "licenses/$KOD.lic"
+          git commit -m "Lisenziya: $KOD ${QEYD:+($QEYD)} [skip ci]" || echo "artıq var"
+          git push

@@ -71,7 +71,7 @@ object SidePanel {
     private fun dp(c: Context, v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.resources.displayMetrics).toInt()
 
     fun show(service: DriveModeService) {
-        if (view != null) return
+        if (view != null || !License.ok) return
         val dm = service.resources.displayMetrics
         val width = if (WindowLauncher.dockRightPx > 0) WindowLauncher.dockRightPx else (dm.widthPixels * 0.24f).toInt()
         // Q07: üst status zolağı 96px, alt iqlim zolağı 1440-dan aşağı

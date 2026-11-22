@@ -73,6 +73,7 @@ import az.q07.launcher.modules.ModuleRegistry
 import az.q07.launcher.ui.theme.CarColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -471,14 +472,12 @@ private fun PermsSection() {
     OutlinedButton(onClick = { QuickActions.openHomeSettings(context) }) { Text("Defolt əsas ekran ayarı") }
 }
 
-private data class UpdateInfo(val latest: Int, val url: String?, val error: String?)
 
 @Composable
 private fun AboutSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
-    var info by remember { mutableStateOf<UpdateInfo?>(null) }
 
     Label("Q07 Launcher ${BuildConfig.VERSION_NAME}", "Build #${BuildConfig.CI_BUILD} · Changan Qiyuan Q07 · 2560×1600")
     Label(
@@ -491,39 +490,40 @@ private fun AboutSection() {
             Text("Normal rejimə qayıt")
         }
     }
-    OutlinedButton(enabled = !checking, onClick = {
-        checking = true
-        scope.launch {
-            info = withContext(Dispatchers.IO) {
-                try {
-                    val c = URL("https://api.github.com/repos/vuqarnamazov/q07launcher/releases/latest")
-                        .openConnection() as HttpURLConnection
-                    c.connectTimeout = 8000; c.readTimeout = 8000
-                    val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-                    val n = o.getString("tag_name").substringAfter("build-").toIntOrNull() ?: 0
-                    val assets = o.getJSONArray("assets")
-                    val url = if (assets.length() > 0) assets.getJSONObject(0).getString("browser_download_url") else null
-                    UpdateInfo(n, url, null)
-                } catch (e: Exception) {
-                    UpdateInfo(0, null, "Yoxlamaq alınmadı: internet yoxdur")
-                }
-            }
-            checking = false
-        }
+    // ---- Lisenziya (VIN-ə bağlı) ----
+    val lic by az.q07.launcher.data.License.state.collectAsState()
+    Label(
+        "Lisenziya: " + if (lic.ok) "aktiv ✓" else "aktiv deyil",
+        listOfNotNull(lic.vinMasked?.let { "VIN $it" }, lic.code?.let { "kod $it" }, lic.source?.let { "mənbə: $it" }).joinToString(" · ")
+    )
+
+    // ---- Yeniləmə (GitHub) ----
+    var progress by remember { mutableStateOf<Float?>(null) }
+    var installMsg by remember { mutableStateOf<String?>(null) }
+    var upd by remember { mutableStateOf<az.q07.launcher.data.Updater.Info?>(null) }
+    OutlinedButton(enabled = !checking && progress == null, onClick = {
+        checking = true; installMsg = null
+        scope.launch { upd = az.q07.launcher.data.Updater.check(); checking = false }
     }) { Text(if (checking) "Yoxlanılır…" else "Yeniləməni yoxla") }
 
-    info?.let { u ->
+    upd?.let { u ->
         when {
             u.error != null -> Text(u.error, fontSize = 15.sp, color = CarColors.Danger)
-            u.latest > BuildConfig.CI_BUILD && u.url != null -> {
-                Text("Yeni versiya var: build #${u.latest}", fontSize = 16.sp, color = CarColors.Green)
-                OutlinedButton(onClick = {
-                    QuickActions.start(context, Intent(Intent.ACTION_VIEW, Uri.parse(u.url)))
-                }) { Text("Yüklə (brauzerdə açılır)") }
+            u.newer -> {
+                Text("Yeni versiya var: build #${u.build} (sizdə #${BuildConfig.CI_BUILD})", fontSize = 16.sp, color = CarColors.Green)
+                OutlinedButton(enabled = progress == null, onClick = {
+                    progress = 0f
+                    scope.launch {
+                        installMsg = az.q07.launcher.data.Updater.install(context, u) { p -> progress = p }
+                            ?: "Quraşdırma pəncərəsi açılır — «Quraşdır» düyməsini basın"
+                        progress = null
+                    }
+                }) { Text(progress?.let { "Yüklənir… ${(it * 100).toInt()}%" } ?: "Yenilə") }
             }
             else -> Text("Ən son versiyadır ✓", fontSize = 16.sp, color = CarColors.Green)
         }
     }
+    installMsg?.let { Text(it, fontSize = 14.sp, color = CarColors.TextSecondary) }
 
     val dm = context.resources.displayMetrics
     Label("Ekran", "${dm.widthPixels}×${dm.heightPixels} px · ${dm.densityDpi} dpi")

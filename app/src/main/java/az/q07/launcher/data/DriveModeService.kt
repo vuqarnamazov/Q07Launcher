@@ -156,7 +156,7 @@ class DriveModeService : AccessibilityService() {
     private var navTries = 0
     private var lastFg: String? = null
 
-    override fun onServiceConnected() { FactoryBridge.service = this }
+    override fun onServiceConnected() { FactoryBridge.service = this; License.start(applicationContext) }
     override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
     override fun onInterrupt() {}
 
@@ -213,6 +213,7 @@ class DriveModeService : AccessibilityService() {
     private fun homeGuard(cls: String?) {
         if (cls == null || !cls.contains("model_main")) return
         if (FactoryBridge.job != null) return
+        if (!License.ok) return // lisenziyasız maşında zavod ekranına mane olmuruq
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastGuardAt < 1500) return
         // freeform tətbiq açılanda Changan sistemi zavod launcher-ini arxa fona özü gətirir — o zaman toxunmuruq
