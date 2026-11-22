@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -281,7 +282,7 @@ object ObdMonitor {
                 log("ATZ → " + link.send("ATZ", 4000).trim())
                 delay(600)
                 // Başlıqlar AÇIQ (ATH1) — cavabın hansı blokdan gəldiyini bilmək üçün; Q07: CAN 11-bit 500k (ATSP6)
-                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP6")) log("$c → " + link.send(c).trim())
+                for (c in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATAT2", "ATSP6")) log("$c → " + link.send(c).trim())
                 val hdr = arrayOf("")
                 countSuffixOk = true
                 val adapterV = runCatching { link.send("ATRV").trim() }.getOrNull()
@@ -296,39 +297,60 @@ object ObdMonitor {
                 val values = _state.value.values.toMutableMap()
                 val unsupported = mutableSetOf<String>()
                 val misses = HashMap<String, Int>()
+                val lastRead = HashMap<String, Long>()
                 var cycle = 0
-                // Eyni bloka gedən sorğular ardıcıl olsun (ATSH az dəyişsin)
-                val ordered = ObdPids.all.sortedBy { it.ecu }
+                // Sürətli göstəricilər (rate=1) hər keçiddə; qalanları vaxta görə növbə ilə,
+                // bir keçiddə ən çox 3 yavaş sorğu — beləliklə ekran ~0.15–0.3 san-dən bir yenilənir.
+                val fast = ObdPids.all.filter { it.rate == 1 }.sortedBy { it.ecu }
+                val slow = ObdPids.all.filter { it.rate != 1 }
+                var slowIdx = 0
+                var lastEmit = 0L
+                fun handle(pid: ObdPid, v: Double?) {
+                    lastRead[pid.key] = System.currentTimeMillis()
+                    if (v == null) {
+                        // 3 dəfə ardıcıl cavab yoxdursa — bu maşında yoxdur
+                        val m = (misses[pid.key] ?: 0) + 1
+                        misses[pid.key] = m
+                        if (m >= 3) { unsupported.add(pid.key); values.remove(pid.key) }
+                    } else { values[pid.key] = v; misses.remove(pid.key) }
+                }
+                // 1-ci dövr: hamısını bir dəfə oxu ki, ekran dərhal dolsun
+                for (pid in ObdPids.all.sortedBy { it.ecu }) handle(pid, query(link, pid, hdr))
+                log("1-ci dövr: ${values.size} dəyər, cavabsız: ${misses.keys}")
+                verbose = false
                 while (true) {
                     if (!AppVisibility.visible) { delay(2000); continue } // launcher gizlidirsə sorğu yox
-                    if (cycle % 60 == 0 && cycle > 0) { unsupported.clear(); misses.clear() }
-                    for (pid in ordered) {
+                    if (cycle % 600 == 0 && cycle > 0) { unsupported.clear(); misses.clear() }
+                    for (pid in fast) if (pid.key !in unsupported) handle(pid, query(link, pid, hdr))
+                    // yavaş göstəricilər: rate × 400 ms-dən bir
+                    val now = System.currentTimeMillis()
+                    var budget = 3
+                    var scanned = 0
+                    while (budget > 0 && scanned < slow.size) {
+                        val pid = slow[slowIdx % slow.size]
+                        slowIdx++; scanned++
                         if (pid.key in unsupported) continue
                         val due = when (pid.rate) {
                             0 -> !values.containsKey(pid.key)
-                            1 -> true
-                            else -> cycle % pid.rate == 0
+                            else -> now - (lastRead[pid.key] ?: 0L) >= pid.rate * 400L
                         }
                         if (!due) continue
-                        val v = query(link, pid, hdr)
-                        if (v == null) {
-                            // 3 dəfə ardıcıl cavab yoxdursa — bu maşında yoxdur
-                            val m = (misses[pid.key] ?: 0) + 1
-                            misses[pid.key] = m
-                            if (m >= 3) { unsupported.add(pid.key); values.remove(pid.key) }
-                        } else { values[pid.key] = v; misses.remove(pid.key) }
+                        handle(pid, query(link, pid, hdr)); budget--
                     }
-                    if (cycle == 0) log("1-ci dövr: ${values.size} dəyər, cavabsız: ${misses.keys}")
-                    verbose = cycle < 1
-                    _state.value = _state.value.copy(
-                        status = if (values.isEmpty()) "Qoşuldu, amma maşın cavab vermir (kontakt açıqdır?)"
-                                 else "Qoşuldu ✓ · ${values.size} göstərici",
-                        connected = true, values = values.toMap(),
-                        unsupported = unsupported.toSet(), updatedAt = System.currentTimeMillis(),
-                        detail = lastRaw
-                    )
+                    val t = System.currentTimeMillis()
+                    if (t - lastEmit >= 120) {
+                        lastEmit = t
+                        _state.value = _state.value.copy(
+                            status = if (values.isEmpty()) "Qoşuldu, amma maşın cavab vermir (kontakt açıqdır?)"
+                                     else "Qoşuldu ✓ · ${values.size} göstərici",
+                            connected = true, values = values.toMap(),
+                            unsupported = unsupported.toSet(), updatedAt = t,
+                            detail = lastRaw
+                        )
+                    }
                     cycle++
-                    delay(AppSettings.obdIntervalMs.toLong())
+                    val pause = AppSettings.obdIntervalMs.toLong()
+                    if (pause > 0) delay(pause) else yield()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 link?.close()

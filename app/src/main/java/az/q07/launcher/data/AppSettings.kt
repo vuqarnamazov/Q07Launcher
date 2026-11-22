@@ -63,7 +63,7 @@ object AppSettings {
     var obdPort by mutableIntStateOf(35000)
     var obdBtMac by mutableStateOf("")
     var obdBtName by mutableStateOf("")
-    var obdIntervalMs by mutableIntStateOf(1500)
+    var obdIntervalMs by mutableIntStateOf(50)
 
     // Hava
     var cityIndex by mutableIntStateOf(0)
@@ -88,7 +88,7 @@ object AppSettings {
             obdPort = getInt("obdPort", 35000)
             obdBtMac = getString("obdBtMac", "")!!
             obdBtName = getString("obdBtName", "")!!
-            obdIntervalMs = getInt("obdInterval", 1500)
+            obdIntervalMs = getInt("obdInterval2", 50)
             cityIndex = getInt("city", 0)
             haptics = getBoolean("haptics", true)
             dockSlotCount = getInt("dockSlots", 4).coerceIn(3, 6)
@@ -119,7 +119,7 @@ object AppSettings {
             .putInt("obdPort", obdPort)
             .putString("obdBtMac", obdBtMac)
             .putString("obdBtName", obdBtName)
-            .putInt("obdInterval", obdIntervalMs)
+            .putInt("obdInterval2", obdIntervalMs)
             .putInt("city", cityIndex)
             .putBoolean("haptics", haptics)
             .putInt("dockSlots", dockSlotCount)

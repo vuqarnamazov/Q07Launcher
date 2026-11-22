@@ -431,9 +431,10 @@ private fun CarSection() {
         }
     }
 
-    Label("Yenilənmə intervalı")
-    val intervals = listOf(1000, 1500, 3000, 5000)
-    Chips(intervals.map { "${it / 1000.0} san" }, intervals.indexOf(AppSettings.obdIntervalMs)) { i ->
+    Label("Yenilənmə sürəti (sürət/dövr/pedal hər keçiddə, qalanları növbə ilə)")
+    val intervals = listOf(0, 50, 300, 1000)
+    val names = listOf("Maksimum", "Sürətli", "Normal", "Qənaətli")
+    Chips(names, intervals.indexOf(AppSettings.obdIntervalMs)) { i ->
         AppSettings.update { obdIntervalMs = intervals[i] }
     }
 }

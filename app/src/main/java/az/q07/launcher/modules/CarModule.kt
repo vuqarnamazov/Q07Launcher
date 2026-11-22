@@ -7,6 +7,10 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import az.q07.launcher.data.WindowLauncher
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.mutableStateOf
@@ -105,6 +109,7 @@ object CarModule : LauncherModule {
         ObdUsage()
         val obd by ObdMonitor.state.collectAsState()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            DriveModeBar()
             CarFactoryWidgets()
             TileGrid(ObdPids.all.filter { it.key in mainKeys + secondKeys }
                 .sortedBy { (mainKeys + secondKeys).indexOf(it.key) }, obd.values)
@@ -133,6 +138,65 @@ object CarModule : LauncherModule {
                 }
             }
         }
+    }
+
+    /**
+     * Sürüş rejimləri: Sport / Standart / Komfort.
+     * Changan SDK rejimi dəyişməyi yalnız icazəli (zavod) tətbiqlərə verir (-1001), ona görə düymə
+     * zavodun «Avtomobil parametrləri» ekranını launcher-in yanında pəncərədə açır — orada bir toxunuşla seçilir.
+     */
+    @Composable
+    private fun DriveModeBar() {
+        val context = LocalContext.current
+        val prefs = remember { context.getSharedPreferences("q07_drivemode", android.content.Context.MODE_PRIVATE) }
+        var last by remember { mutableStateOf(prefs.getString("last", null)) }
+        val modes = listOf(
+            Triple("sport", "Sport", Color(0xFFFF4D4D)),
+            Triple("standard", "Standart", Color(0xFF4DA3FF)),
+            Triple("comfort", "Komfort", Color(0xFF3DDC97))
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Sürüş rejimi", fontSize = 13.sp, color = CarColors.TextSecondary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                modes.forEach { (key, title, color) ->
+                    val active = last == key
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(if (active) color.copy(alpha = 0.28f) else CarColors.PanelAlt)
+                            .border(1.5.dp, if (active) color else color.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
+                            .clickable {
+                                last = key
+                                prefs.edit().putString("last", key).apply()
+                                openDriveModeScreen(context)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            title, fontSize = 15.sp, maxLines = 1,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                            color = if (active) color else CarColors.TextPrimary
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun openDriveModeScreen(context: android.content.Context) {
+        val b = WindowLauncher.bounds(context, WindowLauncher.Area.RIGHT_HALF)
+        val opts = b?.let { android.app.ActivityOptions.makeBasic().setLaunchBounds(it).toBundle() }
+        val deep = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("changan://sda/hmi/vehiclesetting"))
+            .setPackage("com.incall.apps.vehiclesetting")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val ok = runCatching { context.startActivity(deep, opts) }.isSuccess
+        if (!ok) WindowLauncher.launch(
+            context,
+            ComponentName("com.incall.apps.vehiclesetting", "com.incall.apps.vehiclesetting.ui.activity.MainActivity"),
+            WindowLauncher.Area.RIGHT_HALF
+        )
     }
 
     /** Zavodun Enerji və Avtomobil məlumatı vidcetləri — avtomatik qoyulur */
@@ -206,11 +270,14 @@ object CarModule : LauncherModule {
         ) {
             Text(pid.name, fontSize = 13.sp, color = CarColors.TextSecondary, maxLines = 1)
             Row(verticalAlignment = Alignment.Bottom) {
+                val txt = v?.let { ObdMonitor.format(pid, it) } ?: "—"
+                // uzun rəqəmlər (14.41) dar kafeldə sətir aşağı düşməsin
                 Text(
-                    v?.let { ObdMonitor.format(pid, it) } ?: "—",
-                    fontSize = 28.sp, fontWeight = FontWeight.Medium, color = valueColor(pid, v)
+                    txt, maxLines = 1, softWrap = false,
+                    fontSize = if (txt.length >= 5) 22.sp else 28.sp,
+                    fontWeight = FontWeight.Medium, color = valueColor(pid, v)
                 )
-                Text(" " + pid.unit, fontSize = 14.sp, color = CarColors.TextSecondary,
+                Text(" " + pid.unit, fontSize = 14.sp, color = CarColors.TextSecondary, maxLines = 1,
                     modifier = Modifier.padding(bottom = 4.dp))
             }
         }
