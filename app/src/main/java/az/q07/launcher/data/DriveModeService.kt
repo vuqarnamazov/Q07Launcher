@@ -102,7 +102,8 @@ object FactoryBridge {
             service?.showCover(bmp, frame)
             startedAt = System.currentTimeMillis()
             launchTarget(act, j)
-            main.postDelayed({ if (job === j) finish(j, if (j is FactoryJob.Tab && j.index != null) "Zavod ekranı cavab vermədi" else null) }, 6000)
+            service?.startPolling()
+            main.postDelayed({ if (job === j) finish(j, if (j is FactoryJob.Tab && j.index != null) "Alınmadı — yenidən bas" else null) }, 9000)
         }
         if (src.width() <= 0 || src.height() <= 0) { go(null); return }
         val bmp = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888)
@@ -177,6 +178,27 @@ class DriveModeService : AccessibilityService() {
         }
         val pkg = event?.packageName?.toString()
         if (pkg != FactoryBridge.VS && pkg != FactoryBridge.HOME) return
+        process()
+    }
+
+    private var navAt = 0L
+    private var navTries = 0
+    private val poller = object : Runnable {
+        override fun run() {
+            if (FactoryBridge.job == null) return
+            process()
+            main.postDelayed(this, 350)
+        }
+    }
+
+    /** İş başlayanda çağırılır: hadisə gəlməsə də hər 350 ms yoxla */
+    fun startPolling() {
+        navTries = 0; navAt = 0L
+        main.removeCallbacks(poller)
+        main.postDelayed(poller, 400)
+    }
+
+    private fun process() {
         val roots = buildList {
             windows?.forEach { w -> w.root?.let { add(it) } }
             rootInActiveWindow?.let { add(it) }
@@ -195,7 +217,10 @@ class DriveModeService : AccessibilityService() {
                 FactoryBridge.finish(j, null)
             }
             is FactoryJob.Tab -> {
-                val tabs = tabsSeen[j.group] ?: return
+                val tabs = tabsSeen[j.group] ?: run {
+                    roots.firstOrNull { it.packageName == FactoryBridge.VS }?.let { navigateToDrive(it, j.group) }
+                    return
+                }
                 val sel = selected(tabs)
                 val target = j.index
                 if (target == null) { FactoryBridge.finish(j, null); return }
@@ -206,6 +231,7 @@ class DriveModeService : AccessibilityService() {
                 val clickable = generateSequence(node) { it.parent }.firstOrNull { it.isClickable }
                 val ok = clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
                 Log.i("Q07DRIVE", "click ${j.group} target=$target ok=$ok sel=$sel")
+                if (!ok) { val r = Rect(); node.getBoundsInScreen(r); tap(r.exactCenterX(), r.exactCenterY()) }
                 main.postDelayed({
                     if (FactoryBridge.job !== j) return@postDelayed
                     val r = (windows?.mapNotNull { it.root } ?: emptyList()).firstOrNull { it.packageName == FactoryBridge.VS }
@@ -214,6 +240,50 @@ class DriveModeService : AccessibilityService() {
                     FactoryBridge.finish(j, if (s2 == target) "${j.group.names[target]} seçildi" else "Maşın qəbul etmədi")
                 }, 700)
             }
+        }
+    }
+
+    /**
+     * Zavod «Ayarlar» başqa səhifədə qalıbsa (məs. «Avtomobil»): soldakı menyudan «Sürüş»ə keç,
+     * sekmələr görünmürsə səhifəni yuxarı/aşağı sürüşdür.
+     */
+    private fun navigateToDrive(root: AccessibilityNodeInfo, g: TabGroup) {
+        val now = System.currentTimeMillis()
+        if (now - navAt < 900) return
+        navAt = now
+        navTries++
+        val menu = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/item_menu_txt")
+            .sortedBy { val r = Rect(); it.getBoundsInScreen(r); r.top }
+        val drive = menu.firstOrNull { val t = it.text?.toString().orEmpty(); t.startsWith("Sürüş") || t.contains("驾驶") || t.startsWith("Driv") }
+            ?: menu.getOrNull(3)
+        val onDrive = root.findAccessibilityNodeInfosByViewId("${FactoryBridge.VS}:id/v_tab_drive_mode_mask").isNotEmpty()
+        if (!onDrive && drive != null) {
+            val ok = generateSequence(drive) { it.parent }.firstOrNull { it.isClickable }
+                ?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+            if (!ok) { val r = Rect(); drive.getBoundsInScreen(r); tap(r.exactCenterX(), r.exactCenterY()) }
+            Log.i("Q07DRIVE", "nav -> Sürüş ok=$ok")
+            return
+        }
+        // Sürüş səhifəsindəyik, amma bu qrup görünmür — sürüşdür
+        val scrollables = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(n: AccessibilityNodeInfo?, d: Int) {
+            if (n == null || d > 25) return
+            if (n.isScrollable) { val r = Rect(); n.getBoundsInScreen(r); if (r.left > 400) scrollables += n }
+            for (i in 0 until n.childCount) walk(n.getChild(i), d + 1)
+        }
+        walk(root, 0)
+        val action = if (navTries % 4 < 2) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        scrollables.forEach { it.performAction(action) }
+        Log.i("Q07DRIVE", "scroll ${g.name} n=${scrollables.size} try=$navTries")
+    }
+
+    private fun tap(x: Float, y: Float) {
+        val p = android.graphics.Path().apply { moveTo(x, y) }
+        runCatching {
+            dispatchGesture(
+                android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(p, 0, 60)).build(), null, null
+            )
         }
     }
 
