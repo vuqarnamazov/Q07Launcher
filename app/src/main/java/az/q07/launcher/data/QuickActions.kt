@@ -80,7 +80,11 @@ object QuickActions {
     }
 
     /** Zavod launcher-ini açır. Q07 Launcher defolt qalır — Home düyməsi bizi geri qaytarır. */
+    /** İstifadəçi zavod ekranını özü açanda vaxt — HomeGuard bu müddətdə Q07-ni geri qaytarmır */
+    @Volatile var factoryOpenedAt = 0L
+
     fun launchHome(context: Context, target: HomeTarget) {
+        factoryOpenedAt = android.os.SystemClock.elapsedRealtime()
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_HOME)
             .setComponent(target.component)

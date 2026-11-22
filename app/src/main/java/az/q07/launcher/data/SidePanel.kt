@@ -38,8 +38,9 @@ object SidePanel {
     fun onForeground(service: DriveModeService, pkg: String) {
         when {
             pkg == service.packageName || pkg == FactoryBridge.HOME -> hide(service)
-            // tətbiq launcher-in sağında pəncərədə açılırsa launcher özü görünür — yan panel lazım deyil
-            pkg in panelPackages && WindowLauncher.freeformWorks != true -> show(service)
+            // Changan freeform pəncərəsi açılanda sistem arxadakı launcher-i gizlədir (səth silinir, sol tərəf qara qalır),
+            // ona görə sol panel həmişə xüsusi imkan qatı kimi çəkilir
+            pkg in panelPackages -> show(service)
             pkg == "com.android.systemui" || pkg.startsWith("com.incall.apps.hmi") -> Unit
             else -> hide(service)
         }

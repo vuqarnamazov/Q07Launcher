@@ -190,10 +190,44 @@ class DriveModeService : AccessibilityService() {
             val p = event.packageName?.toString()
             if (p != null && p != lastFg) { lastFg = p; SelfDiag.log("fg", p) }
             if (FactoryBridge.job == null && p != null) SidePanel.onForeground(this, p)
+            if (p == FactoryBridge.HOME) homeGuard(event.className?.toString())
         }
         val pkg = event?.packageName?.toString()
         if (pkg != FactoryBridge.VS && pkg != FactoryBridge.HOME) return
         process()
+    }
+
+    // ---------------- Q07 defolt ikən zavod ekranının özbaşına önə çıxmasına qarşı ----------------
+    // Qapı açılıb-bağlananda / sistem düyməsində SystemUI zavod launcher-ini birbaşa açır
+    // (START ... sdalauncher/model_main.MainActivity from com.android.systemui). Q07 defoltdursa geri qayıdırıq.
+    private var defaultCheckedAt = 0L
+    private var isDefaultCached = false
+    private val guardHits = ArrayDeque<Long>()
+
+    private fun homeGuard(cls: String?) {
+        if (cls == null || !cls.contains("model_main")) return
+        if (FactoryBridge.job != null) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - QuickActions.factoryOpenedAt < 20_000) return
+        if (now - defaultCheckedAt > 5_000) {
+            isDefaultCached = runCatching { HomeMode.isDefault(this) }.getOrDefault(false); defaultCheckedAt = now
+        }
+        if (!isDefaultCached) return
+        while (guardHits.isNotEmpty() && now - guardHits.first() > 30_000) guardHits.removeFirst()
+        if (guardHits.size >= 4) return // dövrəyə düşməsin
+        guardHits.addLast(now)
+        SelfDiag.log("homeguard", "zavod ekranı özbaşına açıldı → Q07-yə qayıdış")
+        main.postDelayed({
+            runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+            }.onFailure {
+                runCatching {
+                    startActivity(Intent(this, az.q07.launcher.MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                }
+            }
+        }, 250)
     }
 
     private val poller = object : Runnable {
