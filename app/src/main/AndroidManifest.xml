@@ -72,6 +72,19 @@
 
         <!-- "İndi çalır" kartı üçün media sessiyalarına giriş -->
         <service
+            android:name=".data.DriveModeService"
+            android:exported="false"
+            android:label="Q07 Launcher — sürüş rejimi"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/drive_mode_service" />
+        </service>
+
+        <service
             android:name=".media.MediaListenerService"
             android:exported="true"
             android:label="Q07 Launcher media"

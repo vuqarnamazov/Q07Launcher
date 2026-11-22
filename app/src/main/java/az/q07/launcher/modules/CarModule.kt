@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import az.q07.launcher.data.WindowLauncher
+import az.q07.launcher.data.DriveModeController
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -149,18 +151,27 @@ object CarModule : LauncherModule {
     @Composable
     private fun DriveModeBar() {
         val context = LocalContext.current
-        val prefs = remember { context.getSharedPreferences("q07_drivemode", android.content.Context.MODE_PRIVATE) }
-        var last by remember { mutableStateOf(prefs.getString("last", null)) }
+        val current by DriveModeController.current.collectAsState()
+        val busy by DriveModeController.busy.collectAsState()
+        val msg by DriveModeController.message.collectAsState()
+        val enabled = remember(msg) { DriveModeController.isEnabled(context) }
+        // Kart ilk dəfə görünəndə hazırkı rejimi səssizcə oxu
+        LaunchedEffect(enabled) { if (enabled && DriveModeController.current.value == null) DriveModeController.request(context, null) }
+        // launcher düyməsi → zavod sekməsinin indeksi (Komfort=0, Standart=1, İdman=2)
         val modes = listOf(
-            Triple("sport", "Sport", Color(0xFFFF4D4D)),
-            Triple("standard", "Standart", Color(0xFF4DA3FF)),
-            Triple("comfort", "Komfort", Color(0xFF3DDC97))
+            Triple(2, "Sport", Color(0xFFFF4D4D)),
+            Triple(1, "Standart", Color(0xFF4DA3FF)),
+            Triple(0, "Komfort", Color(0xFF3DDC97))
         )
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Sürüş rejimi", fontSize = 13.sp, color = CarColors.TextSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Sürüş rejimi (qaz pedalı)", fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
+                if (busy) Text("dəyişdirilir…", fontSize = 12.sp, color = CarColors.Warning)
+                else msg?.let { Text(it, fontSize = 12.sp, color = CarColors.TextSecondary, maxLines = 1) }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                modes.forEach { (key, title, color) ->
-                    val active = last == key
+                modes.forEach { (idx, title, color) ->
+                    val active = current == idx
                     Box(
                         Modifier
                             .weight(1f)
@@ -168,11 +179,7 @@ object CarModule : LauncherModule {
                             .clip(RoundedCornerShape(22.dp))
                             .background(if (active) color.copy(alpha = 0.28f) else CarColors.PanelAlt)
                             .border(1.5.dp, if (active) color else color.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
-                            .clickable {
-                                last = key
-                                prefs.edit().putString("last", key).apply()
-                                openDriveModeScreen(context)
-                            },
+                            .clickable(enabled = !busy) { DriveModeController.request(context, idx) },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -183,21 +190,14 @@ object CarModule : LauncherModule {
                     }
                 }
             }
+            if (!enabled) {
+                Text(
+                    "Düymələrin menyuya girmədən işləməsi üçün «Q07 Launcher — sürüş rejimi» xüsusi imkanını aç (bir dəfə).",
+                    fontSize = 12.sp, color = CarColors.Warning,
+                    modifier = Modifier.clickable { DriveModeController.openAccessibilitySettings(context) }
+                )
+            }
         }
-    }
-
-    private fun openDriveModeScreen(context: android.content.Context) {
-        val b = WindowLauncher.bounds(context, WindowLauncher.Area.RIGHT_HALF)
-        val opts = b?.let { android.app.ActivityOptions.makeBasic().setLaunchBounds(it).toBundle() }
-        val deep = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("changan://sda/hmi/vehiclesetting"))
-            .setPackage("com.incall.apps.vehiclesetting")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val ok = runCatching { context.startActivity(deep, opts) }.isSuccess
-        if (!ok) WindowLauncher.launch(
-            context,
-            ComponentName("com.incall.apps.vehiclesetting", "com.incall.apps.vehiclesetting.ui.activity.MainActivity"),
-            WindowLauncher.Area.RIGHT_HALF
-        )
     }
 
     /** Zavodun Enerji və Avtomobil məlumatı vidcetləri — avtomatik qoyulur */

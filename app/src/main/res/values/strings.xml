@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Q07 Launcher</string>
+    <string name="drive_mode_service_desc">Q07 Launcher: Sport / Standart / Komfort düymələri sürüş rejimini zavod ayarlarına girmədən dəyişsin.</string>
 </resources>
