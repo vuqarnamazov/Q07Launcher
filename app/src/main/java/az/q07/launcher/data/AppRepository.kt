@@ -45,6 +45,7 @@ object AppRepository {
     fun launch(context: Context, app: AppEntry, area: WindowLauncher.Area = WindowLauncher.defaultArea()) {
         RecentApps.record(context, app.key)
         if (!WindowLauncher.launch(context, app.component, area)) {
+            SelfDiag.log("launch", "açılmadı: ${app.packageName}")
             QuickActions.toast(context, "${app.label} açıla bilmədi")
         }
     }

@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         LauncherPrefs.init(applicationContext)
         DualNetworkManager.init(applicationContext)
         WidgetStore.init(applicationContext)
+        az.q07.launcher.data.SelfDiag.init(applicationContext)
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         ReminderScheduler.createChannel(applicationContext)
 

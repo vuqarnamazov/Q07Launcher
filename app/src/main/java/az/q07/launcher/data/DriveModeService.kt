@@ -132,6 +132,7 @@ object FactoryBridge {
 
     internal fun finish(j: FactoryJob, msg: String?) {
         if (job !== j) return
+        SelfDiag.log("factory", msg ?: "oxundu", mapOf("job" to j.toString(), "ms" to (System.currentTimeMillis() - startedAt)))
         job = null
         _busy.value = null
         if (msg != null) _message.value = msg
@@ -153,6 +154,7 @@ class DriveModeService : AccessibilityService() {
     private var cover: ImageView? = null
     private var navAt = 0L
     private var navTries = 0
+    private var lastFg: String? = null
 
     override fun onServiceConnected() { FactoryBridge.service = this }
     override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
@@ -184,8 +186,10 @@ class DriveModeService : AccessibilityService() {
 
     // ---------------- hadisələr ----------------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && FactoryBridge.job == null) {
-            event.packageName?.toString()?.let { SidePanel.onForeground(this, it) }
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val p = event.packageName?.toString()
+            if (p != null && p != lastFg) { lastFg = p; SelfDiag.log("fg", p) }
+            if (FactoryBridge.job == null && p != null) SidePanel.onForeground(this, p)
         }
         val pkg = event?.packageName?.toString()
         if (pkg != FactoryBridge.VS && pkg != FactoryBridge.HOME) return
@@ -233,8 +237,9 @@ class DriveModeService : AccessibilityService() {
         val all = roots()
         all.firstOrNull { it.packageName == FactoryBridge.VS }?.let { r ->
             VehicleControl.values().forEach { c -> readState(r, c)?.let { FactoryBridge.report(c, it) } }
+            SelfDiag.snapshotUi("vehiclesetting", r)
         }
-        all.firstOrNull { it.packageName == FactoryBridge.HOME }?.let { readTyres(it) }
+        all.firstOrNull { it.packageName == FactoryBridge.HOME }?.let { readTyres(it); SelfDiag.snapshotUi("sdalauncher", it) }
 
         val j = FactoryBridge.job ?: return
         when (j) {
@@ -274,7 +279,13 @@ class DriveModeService : AccessibilityService() {
     }
 
     private fun tabs(root: AccessibilityNodeInfo, c: VehicleControl): List<AccessibilityNodeInfo> {
-        val anchor = root.findAccessibilityNodeInfosByViewId(id(c.anchorId)).firstOrNull() ?: return emptyList()
+        // 1) id ilə; 2) tapılmasa — əvvəl öyrənilmiş başlıq mətni ilə (zavod yeniləməsində id dəyişə bilər)
+        val byId = root.findAccessibilityNodeInfosByViewId(id(c.anchorId)).firstOrNull()
+        byId?.text?.toString()?.let { SelfDiag.learnTitle(c, it) }
+        val anchor = byId ?: SelfDiag.learnedTitle(c)?.let { t ->
+            root.findAccessibilityNodeInfosByText(t).firstOrNull { it.text?.toString() == t }
+                ?.also { SelfDiag.log("selfheal", "${c.name}: id tapılmadı, başlıq mətni ilə tapıldı") }
+        } ?: return emptyList()
         val a = bounds(anchor)
         val list = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
             .filter { val r = bounds(it); r.top >= a.bottom - 4 && r.top <= a.bottom + 260 }

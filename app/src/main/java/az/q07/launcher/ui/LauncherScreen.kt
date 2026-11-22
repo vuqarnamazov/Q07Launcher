@@ -90,14 +90,14 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                 val pagerScope = rememberCoroutineScope()
                 Box(Modifier.fillMaxSize()) {
                     HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-                        if (page == 0) {
+                        if (page == 0 && !az.q07.launcher.data.SelfDiag.safeMode) {
                             // Səhifə 0: kokpit (fırlanan avtomobil + idarəetmə)
                             CockpitPage(apps, onOpenModules = { pagerScope.launch { pager.animateScrollToPage(1) } })
                         } else Row(
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            if (page == 1) {
+                            if (page <= 1) {
                                 DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
                                 ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
                                 AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())

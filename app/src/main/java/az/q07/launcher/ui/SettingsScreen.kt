@@ -481,6 +481,16 @@ private fun AboutSection() {
     var info by remember { mutableStateOf<UpdateInfo?>(null) }
 
     Label("Q07 Launcher ${BuildConfig.VERSION_NAME}", "Build #${BuildConfig.CI_BUILD} · Changan Qiyuan Q07 · 2560×1600")
+    Label(
+        "Öz-özünə diaqnostika",
+        if (az.q07.launcher.data.SelfDiag.safeMode) "Təhlükəsiz rejim AKTİV (ard-arda çökmə) — kokpit söndürülüb"
+        else "Jurnal yazılır: Android/data/az.q07.launcher/files/diag — kompüter qoşulanda avtomatik götürülür"
+    )
+    if (az.q07.launcher.data.SelfDiag.safeMode) {
+        androidx.compose.material3.OutlinedButton(onClick = { az.q07.launcher.data.SelfDiag.clearSafeMode() }) {
+            Text("Normal rejimə qayıt")
+        }
+    }
     OutlinedButton(enabled = !checking, onClick = {
         checking = true
         scope.launch {

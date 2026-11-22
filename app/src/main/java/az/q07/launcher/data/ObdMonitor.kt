@@ -138,7 +138,11 @@ object ObdMonitor {
     private var job: Job? = null
     private var users = 0
 
-    private fun log(msg: String) { android.util.Log.i("Q07OBD", msg) }
+    private var lastLoggedStatus = ""
+    private fun log(msg: String) {
+        android.util.Log.i("Q07OBD", msg)
+        if (msg.startsWith("XƏTA") || msg.startsWith("1-ci dövr") || msg.startsWith("socket ok") || msg.startsWith("VIN")) SelfDiag.log("obd", msg)
+    }
 
     private val _state = MutableStateFlow(ObdState())
     val state: StateFlow<ObdState> = _state
