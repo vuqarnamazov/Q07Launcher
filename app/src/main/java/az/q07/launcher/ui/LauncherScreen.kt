@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -78,13 +83,45 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                     }
                 }
             } else if (landscape) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
-                    ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
-                    AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
+                // Telefon kimi səhifələr: sola sürüşdür → 2-ci səhifə (açdığım proqramlar)
+                val pager = rememberPagerState(pageCount = { 2 })
+                Box(Modifier.fillMaxSize()) {
+                    HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            if (page == 0) {
+                                DockPanel(apps.orEmpty(), vertical = true, resumeTick = resumeTick, modifier = Modifier.weight(0.22f).fillMaxHeight())
+                                ModulesPanel(Modifier.weight(0.36f).fillMaxHeight())
+                                AppsPanel(apps, columns = AppSettings.gridColumns, Modifier.weight(0.42f).fillMaxHeight())
+                            } else {
+                                DockPanel(
+                                    apps.orEmpty(), vertical = true, resumeTick = resumeTick,
+                                    modifier = Modifier.weight(0.22f).fillMaxHeight().onGloballyPositioned { c ->
+                                        val r = c.boundsInWindow()
+                                        val loc = IntArray(2)
+                                        (context as? android.app.Activity)?.window?.decorView?.getLocationOnScreen(loc)
+                                        az.q07.launcher.data.WindowLauncher.dockRightPx = (r.right + loc[0]).toInt() + 8
+                                    }
+                                )
+                                RecentAppsPanel(apps, Modifier.weight(0.78f).fillMaxHeight())
+                            }
+                        }
+                    }
+                    // səhifə nöqtələri
+                    Row(
+                        Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        repeat(2) { i ->
+                            Box(
+                                Modifier.size(if (pager.currentPage == i) 10.dp else 7.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (pager.currentPage == i) CarColors.TextPrimary else CarColors.TextSecondary.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
                 }
             } else {
                 // Ekran şaquli fırladılanda

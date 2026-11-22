@@ -43,8 +43,39 @@ object AppRepository {
     }
 
     fun launch(context: Context, app: AppEntry, area: WindowLauncher.Area = WindowLauncher.defaultArea()) {
+        RecentApps.record(context, app.key)
         if (!WindowLauncher.launch(context, app.component, area)) {
             QuickActions.toast(context, "${app.label} açıla bilmədi")
         }
+    }
+}
+
+/** Launcher-dən açılan son tətbiqlər (2-ci səhifə üçün) */
+object RecentApps {
+    private const val MAX = 24
+    val keys = androidx.compose.runtime.mutableStateListOf<String>()
+    private var loaded = false
+
+    private fun prefs(context: Context) = context.getSharedPreferences("q07_recent", Context.MODE_PRIVATE)
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        keys.clear()
+        keys.addAll(prefs(context).getString("keys", "").orEmpty().split("|").filter { it.isNotBlank() })
+    }
+
+    fun record(context: Context, key: String) {
+        load(context)
+        keys.remove(key)
+        keys.add(0, key)
+        while (keys.size > MAX) keys.removeAt(keys.lastIndex)
+        prefs(context).edit().putString("keys", keys.joinToString("|")).apply()
+    }
+
+    fun remove(context: Context, key: String) {
+        load(context)
+        keys.remove(key)
+        prefs(context).edit().putString("keys", keys.joinToString("|")).apply()
     }
 }

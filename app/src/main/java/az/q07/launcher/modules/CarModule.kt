@@ -9,7 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import az.q07.launcher.data.WindowLauncher
-import az.q07.launcher.data.DriveModeController
+import az.q07.launcher.data.FactoryBridge
+import az.q07.launcher.data.FactoryJob
+import az.q07.launcher.data.TabGroup
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
@@ -148,54 +150,139 @@ object CarModule : LauncherModule {
      * Changan SDK rejimi dəyişməyi yalnız icazəli (zavod) tətbiqlərə verir (-1001), ona görə düymə
      * zavodun «Avtomobil parametrləri» ekranını launcher-in yanında pəncərədə açır — orada bir toxunuşla seçilir.
      */
+    /** Sürüş rejimi (qaz pedalı) + Amortizator (asqı) + Təkər təzyiqi — zavod ekranına girmədən */
     @Composable
     private fun DriveModeBar() {
         val context = LocalContext.current
-        val current by DriveModeController.current.collectAsState()
-        val busy by DriveModeController.busy.collectAsState()
-        val msg by DriveModeController.message.collectAsState()
-        val enabled = remember(msg) { DriveModeController.isEnabled(context) }
-        // Kart ilk dəfə görünəndə hazırkı rejimi səssizcə oxu
-        LaunchedEffect(enabled) { if (enabled && DriveModeController.current.value == null) DriveModeController.request(context, null) }
-        // launcher düyməsi → zavod sekməsinin indeksi (Komfort=0, Standart=1, İdman=2)
-        val modes = listOf(
-            Triple(2, "Sport", Color(0xFFFF4D4D)),
-            Triple(1, "Standart", Color(0xFF4DA3FF)),
-            Triple(0, "Komfort", Color(0xFF3DDC97))
-        )
+        val activity = context as? android.app.Activity
+        val enabled = remember { FactoryBridge.isEnabled(context) }
+        // ilk dəfə: hazırkı rejimləri və təkərləri səssizcə oxu
+        LaunchedEffect(enabled) {
+            if (enabled && activity != null) {
+                if (FactoryBridge.current.value.isEmpty()) FactoryBridge.enqueue(activity, FactoryJob.Tab(TabGroup.PEDAL, null))
+                if (FactoryBridge.tyres.value == null) FactoryBridge.enqueue(activity, FactoryJob.ReadHome)
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ModeRow(
+                "Sürüş rejimi (qaz pedalı)", TabGroup.PEDAL,
+                listOf(
+                    Triple(2, "Sport", Color(0xFFFF4D4D)),
+                    Triple(1, "Standart", Color(0xFF4DA3FF)),
+                    Triple(0, "Komfort", Color(0xFF3DDC97))
+                )
+            )
+            ModeRow(
+                "Amortizator (asqı)", TabGroup.SUSPENSION,
+                listOf(
+                    Triple(0, "Comfort", Color(0xFF3DDC97)),
+                    Triple(1, "Standart", Color(0xFF4DA3FF)),
+                    Triple(2, "Sport", Color(0xFFFF8A3D)),
+                    Triple(3, "Sport+", Color(0xFFFF4D4D)),
+                    Triple(4, "Smart", Color(0xFFB36BFF))
+                )
+            )
+            TyreCard()
+            if (!enabled) {
+                Text(
+                    "Rejim düymələri və təkər təzyiqi üçün «Q07 Launcher — sürüş rejimi» xidməti aktiv olmalıdır.",
+                    fontSize = 12.sp, color = CarColors.Warning
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ModeRow(title: String, group: TabGroup, items: List<Triple<Int, String, Color>>) {
+        val context = LocalContext.current
+        val activity = context as? android.app.Activity
+        val current by FactoryBridge.current.collectAsState()
+        val busyGroup by FactoryBridge.busyGroup.collectAsState()
+        val working by FactoryBridge.working.collectAsState()
+        val msg by FactoryBridge.message.collectAsState()
+        val sel = current[group]
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Sürüş rejimi (qaz pedalı)", fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
-                if (busy) Text("dəyişdirilir…", fontSize = 12.sp, color = CarColors.Warning)
-                else msg?.let { Text(it, fontSize = 12.sp, color = CarColors.TextSecondary, maxLines = 1) }
+                Text(title, fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
+                if (busyGroup == group) Text("dəyişdirilir…", fontSize = 12.sp, color = CarColors.Warning)
+                else if (sel != null) Text("indi: ${group.names[sel]}", fontSize = 12.sp, color = CarColors.TextSecondary)
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                modes.forEach { (idx, title, color) ->
-                    val active = current == idx
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(if (active) color.copy(alpha = 0.28f) else CarColors.PanelAlt)
-                            .border(1.5.dp, if (active) color else color.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
-                            .clickable(enabled = !busy) { DriveModeController.request(context, idx) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            title, fontSize = 15.sp, maxLines = 1,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                            color = if (active) color else CarColors.TextPrimary
-                        )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // dar ekranda 5 düymə iki sıraya düşür — heç biri itmir
+                val perRow = if (maxWidth / items.size < 74.dp) 3 else items.size
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items.chunked(perRow).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { (idx, label, color) ->
+                                val active = sel == idx
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .clip(RoundedCornerShape(21.dp))
+                                        .background(if (active) color.copy(alpha = 0.28f) else CarColors.PanelAlt)
+                                        .border(1.5.dp, if (active) color else color.copy(alpha = 0.35f), RoundedCornerShape(21.dp))
+                                        .clickable(enabled = !working && activity != null && !active) {
+                                            FactoryBridge.enqueue(activity!!, FactoryJob.Tab(group, idx))
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        label, fontSize = 14.sp, maxLines = 1,
+                                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (active) color else CarColors.TextPrimary
+                                    )
+                                }
+                            }
+                            repeat(perRow - row.size) { Box(Modifier.weight(1f)) }
+                        }
                     }
                 }
             }
-            if (!enabled) {
+            if (busyGroup == null && msg != null && group == TabGroup.PEDAL) {
+                Text(msg!!, fontSize = 11.sp, color = CarColors.TextSecondary)
+            }
+        }
+    }
+
+    /** Təkər təzyiqi — zavod ana ekranından oxunur */
+    @Composable
+    private fun TyreCard() {
+        val context = LocalContext.current
+        val activity = context as? android.app.Activity
+        val t by FactoryBridge.tyres.collectAsState()
+        val working by FactoryBridge.working.collectAsState()
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Təkər təzyiqi", fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f))
                 Text(
-                    "Düymələrin menyuya girmədən işləməsi üçün «Q07 Launcher — sürüş rejimi» xüsusi imkanını aç (bir dəfə).",
-                    fontSize = 12.sp, color = CarColors.Warning,
-                    modifier = Modifier.clickable { DriveModeController.openAccessibilitySettings(context) }
+                    if (working) "…" else "yenilə ↻", fontSize = 12.sp, color = CarColors.TextSecondary,
+                    modifier = Modifier.clickable(enabled = !working && activity != null) {
+                        FactoryBridge.enqueue(activity!!, FactoryJob.ReadHome)
+                    }
                 )
+            }
+            @Composable
+            fun cell(label: String, v: String?, m: Modifier) {
+                val num = v?.replace(',', '.')?.toDoubleOrNull()
+                val c = when {
+                    num == null -> CarColors.TextSecondary
+                    num < 2.0 || num > 3.0 -> CarColors.Warning
+                    else -> CarColors.Green
+                }
+                Column(
+                    m.clip(RoundedCornerShape(14.dp)).background(CarColors.Panel).padding(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(label, fontSize = 12.sp, color = CarColors.TextSecondary, maxLines = 1)
+                    Text((v ?: "—") + " " + (t?.unit ?: "bar"), fontSize = 20.sp, fontWeight = FontWeight.Medium, color = c, maxLines = 1)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                cell("Ön sol", t?.fl, Modifier.weight(1f)); cell("Ön sağ", t?.fr, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                cell("Arxa sol", t?.rl, Modifier.weight(1f)); cell("Arxa sağ", t?.rr, Modifier.weight(1f))
             }
         }
     }
