@@ -61,6 +61,8 @@ object CarLook {
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val cv = Canvas(bmp)
         cv.drawColor(Color.rgb(116, 116, 116))
+        // Modelin nömrə lövhəsinin UV-si üfüqi tərsdir — toxumanı güzgü kimi çəkirik ki, lövhədə düz oxunsun
+        cv.scale(-1f, 1f, size / 2f, size / 2f)
         val top = size * 0.265f; val bottom = size * 0.547f
         val r = RectF(size * 0.006f, top, size * 0.994f, bottom)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
