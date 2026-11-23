@@ -14,8 +14,8 @@ android {
         minSdk = 30          // Android 11 (head unit)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         targetSdk = 30
-        versionCode = 41
-        versionName = "1.40"
+        versionCode = 42
+        versionName = "1.41"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }

@@ -51,7 +51,33 @@ object Car3DModel {
     fun reset(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
-    fun gltf(): ByteBuffer = direct(File(GLTF).readBytes())
+    /**
+     * Zavod faylı oxunur və yaddaşda düzəldilir (fayla toxunulmur):
+     * "Paint" materialı 360° kameranın xüsusi işığı üçün bişirilmiş toxumadır — adi göstəricidə ləkəli görünür.
+     * Onu təmiz, şəffaf olmayan metallik boya ilə əvəz edirik; rəngi sonra baseColorFactor ilə dəyişirik.
+     */
+    fun gltf(): ByteBuffer {
+        val text = File(GLTF).readText()
+        val fixed = runCatching {
+            val g = org.json.JSONObject(text)
+            val mats = g.getJSONArray("materials")
+            for (i in 0 until mats.length()) {
+                val m = mats.getJSONObject(i)
+                if (m.optString("name") == "Paint") {
+                    m.put("alphaMode", "OPAQUE")
+                    val pbr = m.optJSONObject("pbrMetallicRoughness") ?: org.json.JSONObject()
+                    pbr.remove("baseColorTexture")
+                    pbr.put("baseColorFactor", org.json.JSONArray(listOf(0.80, 0.81, 0.83, 1.0)))
+                    pbr.put("metallicFactor", 0.55)
+                    pbr.put("roughnessFactor", 0.32)
+                    m.put("pbrMetallicRoughness", pbr)
+                    m.remove("extensions")
+                }
+            }
+            g.toString()
+        }.getOrDefault(text)
+        return direct(fixed.toByteArray())
+    }
 
     /** glTF daxilindəki fayl adları: .bin modelin yanında, şəkillər res/ altında (.pkm əvəzinə .png) */
     fun resource(uri: String, plate: String = ""): ByteBuffer? {
@@ -166,10 +192,8 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
         bodyColor = rgb
         val asset = viewer.asset ?: return
         val r: Float; val g: Float; val b: Float
-        if (rgb == null) { r = 1f; g = 1f; b = 1f } else {
-            // toxuma açıq-boz olduğu üçün rəngi bir az gücləndiririk
-            r = ((rgb shr 16) and 0xFF) / 255f * 1.25f; g = ((rgb shr 8) and 0xFF) / 255f * 1.25f; b = (rgb and 0xFF) / 255f * 1.25f
-        }
+        val c = rgb ?: 0xFFCDD0D4.toInt()   // zavod: açıq gümüşü
+        r = ((c shr 16) and 0xFF) / 255f; g = ((c shr 8) and 0xFF) / 255f; b = (c and 0xFF) / 255f
         runCatching {
             asset.instance.materialInstances.filter { it.name.equals("Paint", true) }.forEach { mi ->
                 mi.setParameter("baseColorFactor", com.google.android.filament.Colors.RgbaType.SRGB, r, g, b, 1f)
