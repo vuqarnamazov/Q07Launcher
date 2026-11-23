@@ -115,7 +115,8 @@ object Car3DHolder {
     private var view: Car3DTextureView? = null
     fun get(context: Context): Car3DTextureView {
         az.q07.launcher.data.CarLook.load(context)
-        val v = view ?: Car3DTextureView(context.applicationContext, az.q07.launcher.data.CarLook.plate.value).also { view = it }
+        // Pəncərədən ayrılmış view-un Filament obyektləri artıq silinib — onu yenidən işlətmək çökdürür, yenisini yarat
+        val v = view?.takeIf { !it.isDead } ?: Car3DTextureView(context.applicationContext, az.q07.launcher.data.CarLook.plate.value).also { view = it }
         (v.parent as? android.view.ViewGroup)?.removeView(v)
         return v
     }
@@ -133,7 +134,7 @@ fun Car3DView(modifier: Modifier = Modifier) {
             it.setBodyColor(az.q07.launcher.data.CarLook.colors.getOrNull(color)?.rgb)
             it.requestPlate(plate)
         },
-        onRelease = { (it.parent as? android.view.ViewGroup)?.removeView(it) } // silinmir — yenidən istifadə olunur
+        onRelease = { (it.parent as? android.view.ViewGroup)?.removeView(it) } // ayrılanda özü təmizlənir (onDetached)
     )
 }
 
@@ -147,6 +148,8 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
     private val viewer: ModelViewer
     private val choreographer = Choreographer.getInstance()
     private var released = false
+    /** ModelViewer pəncərədən ayrılanda bütün native obyektləri özü silir — bundan sonra view işlədilmir */
+    val isDead: Boolean get() = released
 
     // Toxunulmayanda maşın yavaş-yavaş özü fırlanır; barmaqla istənilən tərəfə çevrilir
     private var spinDeg = 215f
@@ -194,6 +197,21 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
             lastTouch = SystemClock.uptimeMillis()
             true
         }
+        // ModelViewer-in öz "detach" dinləyicisi (ondan əvvəl qeydiyyatda) modeli/rendereri artıq silib.
+        // Biz yalnız kadr dövrəsini dayandırırıq və mühərriki (engine) silirik — destroyModel-i İKİNCİ dəfə çağırmırıq.
+        addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) {}
+            override fun onViewDetachedFromWindow(v: android.view.View) {
+                if (released) return
+                released = true
+                choreographer.removeFrameCallback(this@Car3DTextureView)
+                val ibl = viewer.scene.indirectLight
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    runCatching { ibl?.let { engine.destroyIndirectLight(it) } }
+                    runCatching { engine.destroy() }
+                }
+            }
+        })
         choreographer.postFrameCallback(this)
     }
 
@@ -234,6 +252,7 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
     fun requestPlate(p: String) { if (p != plate) pendingPlate = p }
 
     private fun reloadIfPending() {
+        if (released) return
         val p = pendingPlate ?: return
         if (viewer.asset != null && viewer.progress < 1f) return
         pendingPlate = null
@@ -245,6 +264,7 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
     /** Kuzov rəngi: "Paint" materialının baseColorFactor-u (toxuma ilə vurulur); null = zavod */
     fun setBodyColor(rgb: Int?) {
         bodyColor = rgb
+        if (released) return
         val asset = viewer.asset ?: return
         val r: Float; val g: Float; val b: Float
         val c = rgb ?: 0xFFCDD0D4.toInt()   // zavod: açıq gümüşü
@@ -257,6 +277,7 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
     }
 
     private fun applyTransform() {
+        if (released) return
         val asset = viewer.asset ?: return
         val b = base ?: return
         val out = FloatArray(16); val rot = FloatArray(16); val tmp = FloatArray(16)
@@ -286,8 +307,7 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
         if (released) return
         released = true
         choreographer.removeFrameCallback(this)
-        runCatching { viewer.destroyModel() }
-        runCatching { uiHelper.detach() }
+        if (isAttachedToWindow) return   // pəncərədən ayrılanda ModelViewer + dinləyicimiz təmizləyir
         runCatching { engine.destroy() }
     }
 }

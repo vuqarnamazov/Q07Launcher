@@ -105,7 +105,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                         }
                     )
                 Box(Modifier.weight(0.78f).fillMaxHeight()) {
-                    HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+                    HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = pageCount - 1)  // bütün səhifələr yaddaşda qalır — 3D maşın silinib-yaranmır { page ->
                         Row(Modifier.fillMaxSize().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             when {
                                 page == 0 && cockpit -> {
