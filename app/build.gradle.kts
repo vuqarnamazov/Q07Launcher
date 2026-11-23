@@ -14,10 +14,14 @@ android {
         minSdk = 30          // Android 11 (head unit)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         targetSdk = 30
-        versionCode = 49
-        versionName = "1.48"
+        versionCode = 50
+        versionName = "1.49"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+        // Lisenziya açarı GitHub secret-dən (Q07_LIC_SECRET) gəlir; repoda saxlanmır.
+        // Hərf-hərf kodlanır ki, APK-da sətir kimi birbaşa görünməsin.
+        val lic = (System.getenv("Q07_LIC_SECRET") ?: "").trim()
+        buildConfigField("int[]", "LIC_K", "{" + lic.mapIndexed { i, ch -> (ch.code xor (0x5A + i * 7) and 0xFF).toString() }.joinToString(",") + "}")
     }
 
     // Sabit imza GitHub Secrets-dən gəlir (Q07_KEYSTORE_B64, Q07_KS_PASS) — açar repoda saxlanmır.

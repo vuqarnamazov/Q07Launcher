@@ -73,7 +73,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CarLauncherTheme {
-                LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
+                var activated by androidx.compose.runtime.remember {
+                    androidx.compose.runtime.mutableStateOf(az.q07.launcher.data.LicenseManager.isActivated(applicationContext))
+                }
+                if (activated) {
+                    LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
+                } else {
+                    az.q07.launcher.ui.ActivationLockScreen(onUnlocked = { activated = true })
+                }
             }
         }
     }

@@ -218,6 +218,7 @@ class DriveModeService : AccessibilityService() {
     private var lastGuardAt = 0L
 
     private fun homeGuard(cls: String?) {
+        if (!LicenseManager.isActivated(this)) return
         if (cls == null || !cls.contains("model_main")) return
         if (FactoryBridge.job != null) return
         val now = android.os.SystemClock.elapsedRealtime()
