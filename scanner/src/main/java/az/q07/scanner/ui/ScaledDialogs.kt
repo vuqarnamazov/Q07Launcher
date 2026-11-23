@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import az.q07.launcher.ui.theme.CarColors
+import az.q07.scanner.ui.theme.CarColors
 
 /**
  * Dialoq pəncərələri öz LocalDensity-sini sistemdən götürür → launcher miqyası (×2, 120%…) itir
