@@ -58,10 +58,12 @@ object TamQeyd {
      * yoxdursa proqramın öz qovluğu (Android/data/... — silinəndə itir).
      */
     fun storageRoot(context: Context): File {
+        // Həqiqi yazma sınağı (canWrite bəzi yaddaş rejimlərində yalan deyir)
         val shared = runCatching {
-            if (android.os.Environment.isExternalStorageManager())
-                File(android.os.Environment.getExternalStorageDirectory(), "Q07Qeyd").apply { mkdirs() }.takeIf { it.canWrite() }
-            else null
+            val d = File(android.os.Environment.getExternalStorageDirectory(), "Q07Qeyd").apply { mkdirs() }
+            val probe = File(d, ".yazma_sinagi")
+            probe.writeText(System.currentTimeMillis().toString())
+            if (probe.exists() && probe.length() > 0) d else null
         }.getOrNull()
         return shared ?: File(context.getExternalFilesDir(null), "qeyd").apply { mkdirs() }
     }
