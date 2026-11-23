@@ -33,19 +33,29 @@ object Car3DModel {
 
     private const val PREFS = "q07_car3d"
 
-    /** 3D yüklənərkən proses çöksə (native), növbəti açılışda 3D söndürülür — köhnə rəsm göstərilir */
+    /**
+     * 3D yüklənərkən proses ard-arda 2 dəfə çöksə (native), həmin versiyada 3D söndürülür (köhnə rəsm).
+     * Yeni versiya quraşdırılanda yenidən sınanır. Bayraq model yüklənən kimi təmizlənir.
+     */
     fun available(context: Context): Boolean {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val ver = az.q07.launcher.BuildConfig.VERSION_CODE
+        if (p.getInt("ver", -1) != ver) p.edit().clear().putInt("ver", ver).apply()
         if (p.getBoolean("loading", false)) {
-            p.edit().putBoolean("loading", false).putBoolean("disabled", true).apply()
-            SelfDiag.log("car3d", "əvvəlki yükləmə zamanı çökmə — 3D söndürüldü, köhnə rəsm")
+            val fails = p.getInt("fails", 0) + 1
+            p.edit().putBoolean("loading", false).putInt("fails", fails).apply()
+            SelfDiag.log("car3d", "yükləmə yarımçıq qaldı ($fails)")
+            if (fails >= 2) p.edit().putBoolean("disabled", true).apply()
         }
         if (p.getBoolean("disabled", false)) return false
         return runCatching { File(GLTF).canRead() }.getOrDefault(false)
     }
 
-    fun markLoading(context: Context, on: Boolean) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("loading", on).commit()
+    fun markLoading(context: Context, on: Boolean) {
+        val e = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("loading", on)
+        if (!on) e.putInt("fails", 0)
+        e.commit()
+    }
 
     /** Ayarlardan yenidən yoxlamaq üçün */
     fun reset(context: Context) =
@@ -168,6 +178,7 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
         try {
             viewer.loadModelGltf(Car3DModel.gltf()) { uri -> Car3DModel.resource(uri, plate) }
             val asset = viewer.asset ?: run {
+                Car3DModel.markLoading(context, false)
                 SelfDiag.log("car3d", "3D model açılmadı (asset=null)")
                 return
             }
@@ -183,8 +194,10 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
             base = m
             applyTransform()
             setBodyColor(bodyColor)
+            Car3DModel.markLoading(context, false)
             SelfDiag.log("car3d", "zavod 3D modeli yükləndi (${asset.entities.size} hissə)")
         } catch (t: Throwable) {
+            Car3DModel.markLoading(context, false)
             SelfDiag.log("car3d", "3D model yüklənmədi: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
@@ -227,7 +240,6 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
         lastFrame = now
         if (now - lastTouch > 4000) { spinDeg = (spinDeg + dt * 12f) % 360f; applyTransform() }
         runCatching { viewer.render(frameTimeNanos) }
-        if (framesOk < 120 && ++framesOk == 120) Car3DModel.markLoading(context, false) // ~2 san problemsiz
     }
 
     fun release() {
