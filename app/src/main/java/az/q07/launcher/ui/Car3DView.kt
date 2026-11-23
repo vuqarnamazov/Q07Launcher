@@ -150,6 +150,9 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
 
     // Toxunulmayanda maşın yavaş-yavaş özü fırlanır; barmaqla istənilən tərəfə çevrilir
     private var spinDeg = 215f
+    private var tiltDeg = 0f
+    private var lastX = 0f
+    private var lastY = 0f
     private var lastTouch = 0L
     private var lastFrame = 0L
     private var base: FloatArray? = null
@@ -176,9 +179,18 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
             .intensity(32_000f)
             .build(engine)
         load()
+        // Öz toxunuş idarəmiz: üfüqi sürüşdürmə — fırlatma, şaquli — yuxarıdan/aşağıdan baxış (məhdud).
+        // Kamera yerindən oynamır və yaxınlaşmır — maşın heç vaxt kadrdan çıxmır.
         setOnTouchListener { v, e ->
-            if (e.actionMasked == MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
-            viewer.onTouchEvent(e)
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { v.parent?.requestDisallowInterceptTouchEvent(true); lastX = e.x; lastY = e.y }
+                MotionEvent.ACTION_MOVE -> {
+                    spinDeg = (spinDeg + (e.x - lastX) * 0.35f) % 360f
+                    tiltDeg = (tiltDeg + (e.y - lastY) * 0.15f).coerceIn(-8f, 35f)
+                    lastX = e.x; lastY = e.y
+                    applyTransform()
+                }
+            }
             lastTouch = SystemClock.uptimeMillis()
             true
         }
@@ -250,6 +262,7 @@ class Car3DTextureView(context: Context, private var plate: String) : TextureVie
         val out = FloatArray(16); val rot = FloatArray(16); val tmp = FloatArray(16)
         android.opengl.Matrix.setIdentityM(rot, 0)
         android.opengl.Matrix.translateM(rot, 0, 0f, 0f, -4f)
+        android.opengl.Matrix.rotateM(rot, 0, tiltDeg, 1f, 0f, 0f)
         android.opengl.Matrix.rotateM(rot, 0, spinDeg, 0f, 1f, 0f)
         android.opengl.Matrix.multiplyMM(tmp, 0, rot, 0, b, 0)
         System.arraycopy(tmp, 0, out, 0, 16)

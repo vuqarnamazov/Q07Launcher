@@ -1,5 +1,7 @@
 package az.q07.launcher.ui
 
+import az.q07.launcher.data.PassengerScreen
+import androidx.compose.material.icons.filled.ScreenShare
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -106,6 +108,9 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
     var homeChoices by remember { mutableStateOf<List<HomeTarget>?>(null) }
     var pickingSlot by remember { mutableStateOf<Int?>(null) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var factoryMenu by remember { mutableStateOf(false) }
+    var passengerOpen by remember { mutableStateOf(false) }
+    var passengerMsg by remember { mutableStateOf<String?>(null) }
     val byKey = remember(apps) { apps.associateBy { it.key } }
 
     // Media (çalan mahnı) — tək paylaşılan mənbə
@@ -222,19 +227,19 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                         // Kompakt rejimdə maşın göstəriciləri solda daim görünür
                         if (AppSettings.compactMode) az.q07.launcher.modules.CarMiniGauges()
                         // Sabit düymələr: iPhone kimi sürüşdürüb təsdiqlə (təsadüfən basılmasın)
+                        // Bir düymə: sürüşdür → seçim (Zavod menyusu / defolt əsas ekran)
                         SlideToConfirm(
-                            label = if (home.isDefault) "Zavoda qaytar" else "Q07-ni defolt et",
-                            color = if (home.isDefault) CarColors.Warning else CarColors.Green,
-                            icon = Icons.Filled.SwapHoriz,
-                            height = btnH,
-                            onConfirm = home.toggle
-                        )
-                        SlideToConfirm(
-                            label = "Zavod menyusu",
+                            label = "Zavod  ·  Defolt",
                             color = CarColors.Warning,
                             icon = Icons.Filled.Home,
                             height = btnH,
-                            onConfirm = onFactory
+                            onConfirm = { factoryMenu = true }
+                        )
+                        DockButton(
+                            label = "Sərnişin ekranı", subtitle = null, bitmap = null,
+                            vector = Icons.Filled.ScreenShare, tint = CarColors.Accent,
+                            modifier = Modifier.fillMaxWidth().height(btnH),
+                            onClick = { passengerOpen = true }
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             DockButton(
@@ -305,6 +310,43 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
             onPick = { LauncherPrefs.setDockSlot(slot, it.component); pickingSlot = null },
             onClear = { LauncherPrefs.setDockSlot(slot, null); pickingSlot = null },
             onDismiss = { pickingSlot = null }
+        )
+    }
+
+    if (factoryMenu) {
+        ScaledAlertDialog(
+            onDismissRequest = { factoryMenu = false },
+            title = { Text("Zavod  ·  Defolt əsas ekran") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { factoryMenu = false; onFactory() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Zavod menyusunu aç", fontSize = 20.sp)
+                    }
+                    TextButton(onClick = { factoryMenu = false; home.toggle() }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (home.isDefault) "Defoltu zavoda qaytar (indi: Q07)" else "Q07-ni defolt et (indi: Zavod)", fontSize = 20.sp)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { factoryMenu = false }) { Text("Bağla") } }
+        )
+    }
+
+    if (passengerOpen) {
+        AppPickerDialog(
+            title = if (PassengerScreen.available(context)) "Sərnişin ekranına göndər" else "Sərnişin ekranı tapılmadı",
+            apps = apps.filterNot { LauncherPrefs.isHidden(it.key) },
+            onPick = { passengerOpen = false; passengerMsg = PassengerScreen.launch(context, it.component) ?: "${it.label} sərnişin ekranında açıldı" },
+            onClear = { passengerOpen = false; passengerMsg = PassengerScreen.goHome(context) ?: "Sərnişin ekranı əsas ekrana qaytarıldı" },
+            onDismiss = { passengerOpen = false },
+            clearLabel = "Sərnişin ekranını təmizlə"
+        )
+    }
+    passengerMsg?.let { m ->
+        LaunchedEffect(m) { kotlinx.coroutines.delay(3000); passengerMsg = null }
+        ScaledAlertDialog(
+            onDismissRequest = { passengerMsg = null },
+            text = { Text(m, fontSize = 18.sp) },
+            confirmButton = { TextButton(onClick = { passengerMsg = null }) { Text("OK") } }
         )
     }
 

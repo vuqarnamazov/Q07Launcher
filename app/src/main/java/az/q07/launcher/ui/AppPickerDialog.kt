@@ -28,7 +28,8 @@ fun AppPickerDialog(
     apps: List<AppEntry>,
     onPick: (AppEntry) -> Unit,
     onClear: (() -> Unit)?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    clearLabel: String = "Slotu boşalt"
 ) {
     ScaledAlertDialog(
         onDismissRequest = onDismiss,
@@ -54,7 +55,7 @@ fun AppPickerDialog(
             TextButton(onClick = onDismiss) { Text("Bağla") }
         },
         dismissButton = {
-            if (onClear != null) TextButton(onClick = onClear) { Text("Slotu boşalt") }
+            if (onClear != null) TextButton(onClick = onClear) { Text(clearLabel) }
         }
     )
 }

@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Q07Launcher"
 include(":app")
+include(":scanner")

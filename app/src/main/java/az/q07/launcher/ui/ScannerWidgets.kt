@@ -62,6 +62,10 @@ import az.q07.launcher.ui.theme.CarColors
 val ScannerAccent = Color(0xFFFF4D8D)
 
 fun openScannerScreen(context: Context) {
+    // Ayrıca "Q07 Skaner" tətbiqi qurulubsa — onu aç
+    context.packageManager.getLaunchIntentForPackage("az.q07.scanner")?.let { i ->
+        if (runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+    }
     runCatching {
         context.startActivity(Intent(context, VehicleScannerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

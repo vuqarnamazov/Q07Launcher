@@ -50,7 +50,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Q07Launcher
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            scanner/build/outputs/apk/release/*.apk
 
       # Hər uğurlu build GitHub Release kimi də dərc olunur (birbaşa yükləmə linki)
       - name: Publish release
@@ -60,5 +62,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Q07 Launcher build ${{ github.run_number }}
           body: "Commit ${{ github.sha }}"
-          files: app/build/outputs/apk/release/app-release.apk
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            scanner/build/outputs/apk/release/scanner-release.apk
           make_latest: true
