@@ -66,7 +66,7 @@ fun SystemScanTab() {
                     val f = withContext(Dispatchers.IO) { VehicleSystemScanner.saveExport(context, r) }
                     results = r; busy = false
                     banner = "Tapıldı: ${r.size} yol · " + r.groupingBy { it.category }.eachCount().entries.joinToString(" · ") { "${it.key} ${it.value}" } +
-                        (if (f != null) " · qeyd/export/sistem_skani.json-a yazıldı" else "")
+                        (if (f != null) " · export/sistem_skani.json-a yazıldı" else "")
                 }
             }
             ScPill("Nəticələri kopyala", Icons.Filled.ContentCopy, CarColors.TextSecondary, enabled = results.isNotEmpty()) {

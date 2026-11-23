@@ -53,12 +53,53 @@ object TamQeyd {
     private val streams = HashMap<String, Pair<String, OutputStream>>()   // növ → (fayl adı, axın)
     @Volatile var eventsWritten = 0L; private set
 
+    /**
+     * Qeyd qovluğu: icazə varsa /sdcard/Q07Qeyd (proqram silinib-qurulsa belə qalır),
+     * yoxdursa proqramın öz qovluğu (Android/data/... — silinəndə itir).
+     */
+    fun storageRoot(context: Context): File {
+        val shared = runCatching {
+            if (android.os.Environment.isExternalStorageManager())
+                File(android.os.Environment.getExternalStorageDirectory(), "Q07Qeyd").apply { mkdirs() }.takeIf { it.canWrite() }
+            else null
+        }.getOrNull()
+        return shared ?: File(context.getExternalFilesDir(null), "qeyd").apply { mkdirs() }
+    }
+
+    private val baseFiles = listOf("vehicle_structure_map.json", "recorded_flows.json", "learned_functions.json")
+
+    /**
+     * Skanerin öz bazasının bərpası — repozitoriyalar yüklənməzdən ƏVVƏL çağırılır:
+     *  1) qeyd/berpa/ qovluğunda fayl varsa → daxili bazanın üzərinə yazılır (əl ilə bərpa), sonra berpa_edildi/-yə köçür
+     *  2) daxili fayl yoxdursa (proqram silinib-qurulub) → qeyd/export/-dakı son surətdən bərpa
+     */
+    fun restoreBase(context: Context) {
+        val r = storageRoot(context)
+        val inDir = context.applicationContext.filesDir
+        val berpa = File(r, "berpa")
+        berpa.listFiles { f -> f.isFile && f.name in baseFiles }?.forEach { f ->
+            runCatching {
+                f.copyTo(File(inDir, f.name), overwrite = true)
+                val done = File(r, "berpa_edildi").apply { mkdirs() }
+                f.renameTo(File(done, f.name + "." + System.currentTimeMillis()))
+                SelfDiag.log("berpa", "əl ilə bərpa edildi: ${f.name}")
+            }
+        }
+        val exp = File(r, "export")
+        for (n in baseFiles) {
+            val dst = File(inDir, n); val src = File(exp, n)
+            if (!dst.exists() && src.exists() && src.length() > 0) runCatching {
+                src.copyTo(dst); SelfDiag.log("berpa", "avtomatik bərpa (proqram yenidən qurulub): $n")
+            }
+        }
+    }
+
     // ---------------- başlat / dayandır ----------------
     @Synchronized
     fun start(context: Context) {
         if (running) return
         app = context.applicationContext
-        root = File(app.getExternalFilesDir(null), "qeyd").apply { mkdirs() }
+        root = storageRoot(app)
         running = true
         val t = HandlerThread("tam-qeyd").also { it.start() }
         thread = t
@@ -368,7 +409,11 @@ object TamQeyd {
         val out = File(root, "export").apply { mkdirs() }
         app.filesDir.listFiles { f -> f.isFile && f.name.endsWith(".json") }?.forEach { src ->
             val dst = File(out, src.name)
-            if (!dst.exists() || dst.lastModified() < src.lastModified()) src.copyTo(dst, overwrite = true)
+            if (!dst.exists() || dst.lastModified() < src.lastModified()) {
+                // təzə/boş baza köhnə yaxşı surəti əzməsin: əvvəlki surət .onceki kimi saxlanır
+                if (dst.exists() && src.length() < dst.length() / 2) dst.copyTo(File(out, src.name + ".onceki"), overwrite = true)
+                src.copyTo(dst, overwrite = true)
+            }
         }
     }
 

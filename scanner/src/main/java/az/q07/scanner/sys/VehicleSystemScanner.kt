@@ -137,7 +137,7 @@ object VehicleSystemScanner {
 
     /** Nəticəni tam qeyd qovluğuna da yazır — PC-yə Q07_qeyd_cek.bat ilə çəkilir */
     fun saveExport(context: Context, nodes: List<DiscoveredVehicleNode>): File? = runCatching {
-        val dir = File(context.getExternalFilesDir(null), "qeyd/export").apply { mkdirs() }
+        val dir = File(az.q07.scanner.rec.TamQeyd.storageRoot(context), "export").apply { mkdirs() }
         File(dir, "sistem_skani.json").apply { writeText(exportAsJson(nodes)) }
     }.getOrNull()
 }

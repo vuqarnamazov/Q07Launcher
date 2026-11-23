@@ -9,6 +9,8 @@
     <!-- Tam qeyd: sistem jurnalı və activity keçidləri (adb ilə verilir: Q07_skaner_qur.bat) -->
     <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <!-- Qeydlər /sdcard/Q07Qeyd-də saxlanır: proqram silinsə belə itmir (adb appops ilə verilir) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!-- Avtomobil xassələri: verilə bilənlər verilir, qalanları sadəcə oxunmur -->
     <uses-permission android:name="android.car.permission.CAR_INFO" />
     <uses-permission android:name="android.car.permission.CAR_ENERGY" />
