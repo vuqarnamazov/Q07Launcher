@@ -12,9 +12,10 @@ android {
     defaultConfig {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         targetSdk = 30
-        versionCode = 38
-        versionName = "1.37"
+        versionCode = 39
+        versionName = "1.38"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
@@ -80,4 +81,8 @@ dependencies {
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
     // Daxili göstəricilərin son vəziyyəti şifrələnmiş saxlanır
     implementation("androidx.security:security-crypto:1.0.0")
+    // Maşının zavod 3D modelini göstərmək üçün (Google Filament)
+    implementation("com.google.android.filament:filament-android:1.54.5")
+    implementation("com.google.android.filament:gltfio-android:1.54.5")
+    implementation("com.google.android.filament:filament-utils-android:1.54.5")
 }

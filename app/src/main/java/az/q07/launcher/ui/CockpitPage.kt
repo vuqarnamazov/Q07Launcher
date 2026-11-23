@@ -348,8 +348,10 @@ private fun RotatingCar(modifier: Modifier) {
     val density = LocalDensity.current
     val tyres by FactoryBridge.tyres.collectAsState()
     val obd by ObdMonitor.state.collectAsState()
+    // Maşının zavod 3D modeli varsa — tam 3D (barmaqla hər tərəfə fırlanır), yoxdursa köhnə rəsm
+    val use3d = remember { Car3DModel.available }
     Box(
-        modifier
+        if (use3d) modifier else modifier
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { scope.launch { angle.stop() } },
@@ -388,7 +390,8 @@ private fun RotatingCar(modifier: Modifier) {
             )
         }
         val a = angle.value
-        Box(
+        if (use3d) Car3DView(Modifier.fillMaxSize())
+        else Box(
             Modifier.fillMaxSize().graphicsLayer {
                 rotationY = a
                 cameraDistance = 14f * density.density

@@ -10,3 +10,6 @@
 -dontwarn com.google.api.client.**
 -dontwarn org.joda.time.**
 -keep class com.google.crypto.tink.proto.** { *; }
+
+# Filament (JNI)
+-keep class com.google.android.filament.** { *; }
