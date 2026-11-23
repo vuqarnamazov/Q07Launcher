@@ -10,5 +10,7 @@ class ScannerApp : Application() {
         SelfDiag.log("start", "Q07 Skaner açıldı", mapOf("version" to BuildConfig.VERSION_NAME))
         runCatching { FullVehicleScannerManager.init(this) }
         runCatching { FullVehicleScannerManager.restoreIfNeeded(this) }
+        // Tam qeyd proses başlayan kimi (xidmət qoşulmasa belə) — ekran hadisələri xidmətdən əlavə olunur
+        runCatching { az.q07.scanner.rec.TamQeyd.start(this) }
     }
 }
