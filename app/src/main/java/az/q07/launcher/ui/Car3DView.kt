@@ -29,18 +29,35 @@ object Car3DModel {
     private const val RES = "/system/etc/automotive/caevs/lib/avm/res/"
     private const val GLTF = RES + "model/car/CaCar.gltf"
 
-    val available: Boolean by lazy { runCatching { File(GLTF).canRead() }.getOrDefault(false) }
+    private const val PREFS = "q07_car3d"
+
+    /** 3D yüklənərkən proses çöksə (native), növbəti açılışda 3D söndürülür — köhnə rəsm göstərilir */
+    fun available(context: Context): Boolean {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (p.getBoolean("loading", false)) {
+            p.edit().putBoolean("loading", false).putBoolean("disabled", true).apply()
+            SelfDiag.log("car3d", "əvvəlki yükləmə zamanı çökmə — 3D söndürüldü, köhnə rəsm")
+        }
+        if (p.getBoolean("disabled", false)) return false
+        return runCatching { File(GLTF).canRead() }.getOrDefault(false)
+    }
+
+    fun markLoading(context: Context, on: Boolean) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("loading", on).commit()
+
+    /** Ayarlardan yenidən yoxlamaq üçün */
+    fun reset(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
     fun gltf(): ByteBuffer = direct(File(GLTF).readBytes())
 
     /** glTF daxilindəki fayl adları: .bin modelin yanında, şəkillər res/ altında (.pkm əvəzinə .png) */
     fun resource(uri: String): ByteBuffer? {
         val u = uri.substringBefore('?')
-        val candidates = buildList {
-            val png = u.replace(Regex("\\.pkm$"), ".png")
-            add(RES + "model/car/" + u); add(RES + u)
-            add(RES + "model/car/" + png); add(RES + png)
-        }
+        // .pkm (ETC sıxılmış) Filament tərəfindən oxunmur — həmişə yanındakı .png götürülür
+        val png = u.replace(Regex("\\.pkm$"), ".png")
+        val candidates = if (png != u) listOf(RES + png, RES + "model/car/" + png)
+        else listOf(RES + "model/car/" + u, RES + u)
         val f = candidates.map(::File).firstOrNull { it.canRead() } ?: return null
         return direct(f.readBytes())
     }
@@ -74,6 +91,7 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
     private var lastTouch = 0L
     private var lastFrame = 0L
     private var base: FloatArray? = null
+    private var framesOk = 0
 
     init {
         val manipulator = Manipulator.Builder()
@@ -105,6 +123,8 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
     }
 
     private fun load() {
+        // Yükləmə + ilk kadrlar bitənə qədər "loading" bayrağı qalır (native çökmədən qorunma)
+        Car3DModel.markLoading(context, true)
         try {
             viewer.loadModelGltf(Car3DModel.gltf()) { uri -> Car3DModel.resource(uri) }
             val asset = viewer.asset ?: return
@@ -147,6 +167,7 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
         lastFrame = now
         if (now - lastTouch > 4000) { spinDeg = (spinDeg + dt * 12f) % 360f; applyTransform() }
         runCatching { viewer.render(frameTimeNanos) }
+        if (framesOk < 120 && ++framesOk == 120) Car3DModel.markLoading(context, false) // ~2 san problemsiz
     }
 
     fun release() {

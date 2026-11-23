@@ -349,7 +349,8 @@ private fun RotatingCar(modifier: Modifier) {
     val tyres by FactoryBridge.tyres.collectAsState()
     val obd by ObdMonitor.state.collectAsState()
     // Maşının zavod 3D modeli varsa — tam 3D (barmaqla hər tərəfə fırlanır), yoxdursa köhnə rəsm
-    val use3d = remember { Car3DModel.available }
+    val ctx3d = LocalContext.current
+    val use3d = remember { Car3DModel.available(ctx3d) }
     Box(
         if (use3d) modifier else modifier
             .pointerInput(Unit) {
