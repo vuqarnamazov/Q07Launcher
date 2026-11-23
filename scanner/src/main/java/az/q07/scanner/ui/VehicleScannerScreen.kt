@@ -76,7 +76,7 @@ class VehicleScannerActivity : ComponentActivity() {
 }
 
 private enum class ScTab(val title: String) {
-    LIVE("Canlı ekran"), SCREENS("Ekranlar"), PATHS("Yollar"), FLOWS("Gedişatlar"), IMPORT("Götür və Əlavə Et"), LAUNCHER("Launcher funksiyaları")
+    LIVE("Canlı ekran"), SYSTEM("Sistem skanı"), SCREENS("Ekranlar"), PATHS("Yollar"), FLOWS("Gedişatlar"), IMPORT("Götür və Əlavə Et"), LAUNCHER("Launcher funksiyaları")
 }
 
 @Composable
@@ -111,6 +111,7 @@ fun VehicleScannerScreen(onClose: () -> Unit) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 ScTab.LIVE -> LiveTab(pick)
+                ScTab.SYSTEM -> SystemScanTab()
                 ScTab.SCREENS -> ScreensTab(pick)
                 ScTab.PATHS -> PathsTab()
                 ScTab.FLOWS -> FlowsTab(pick)

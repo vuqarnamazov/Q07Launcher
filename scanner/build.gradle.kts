@@ -13,8 +13,8 @@ android {
         applicationId = "az.q07.scanner"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
