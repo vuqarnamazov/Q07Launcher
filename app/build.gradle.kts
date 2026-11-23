@@ -13,8 +13,8 @@ android {
         applicationId = "az.q07.launcher"
         minSdk = 30          // Android 11 (head unit)
         targetSdk = 30
-        versionCode = 35
-        versionName = "1.34"
+        versionCode = 36
+        versionName = "1.35"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
@@ -78,4 +78,6 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
+    // Daxili göstəricilərin son vəziyyəti şifrələnmiş saxlanır
+    implementation("androidx.security:security-crypto:1.0.0")
 }

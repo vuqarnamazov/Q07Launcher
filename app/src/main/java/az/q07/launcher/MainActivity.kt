@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.SelfDiag.init(applicationContext)
         az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         az.q07.launcher.data.ObdMonitor.ensureRunning()
+        az.q07.launcher.data.VehicleTelemetryReader.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
         // İzləmə Skaneri: bazalar + əvvəl aktiv idisə xidməti bərpa et
         az.q07.launcher.scanner.RecorderScannerManager.restoreIfNeeded(applicationContext)

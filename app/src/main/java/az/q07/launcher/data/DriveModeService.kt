@@ -156,7 +156,7 @@ class DriveModeService : AccessibilityService() {
     private var navTries = 0
     private var lastFg: String? = null
 
-    override fun onServiceConnected() { FactoryBridge.service = this }
+    override fun onServiceConnected() { FactoryBridge.service = this; VehicleTelemetryReader.start(applicationContext) }
     override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
     override fun onInterrupt() {}
 
@@ -189,6 +189,10 @@ class DriveModeService : AccessibilityService() {
         // İzləmə Skaneri: kliklər və pəncərə keçidləri (skaner sönülüdürsə yalnız ön plan izlənir)
         if (event != null) runCatching { az.q07.launcher.scanner.RecorderScannerManager.onEvent(this, event) }
         if (event?.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        // Daxili göstəricilər: status zolağı və zavod ekranlarındakı km/h, %, km, °C mətnləri
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            if (VehicleTelemetryReader.due()) runCatching { VehicleTelemetryReader.onAccessibility(windows) }
+        }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val p = event.packageName?.toString()
             if (p != null && p != lastFg) { lastFg = p; SelfDiag.log("fg", p) }
