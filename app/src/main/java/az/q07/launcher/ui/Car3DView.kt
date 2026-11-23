@@ -74,7 +74,8 @@ object Car3DModel {
                     m.remove("extensions")
                 }
             }
-            g.toString()
+            // org.json "/" simvolunu "\/" kimi yazır — 3D mühərrik (cgltf) fayl yollarını tanımır
+            g.toString().replace("\\/", "/")
         }.getOrDefault(text)
         return direct(fixed.toByteArray())
     }
@@ -166,7 +167,10 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
         Car3DModel.markLoading(context, true)
         try {
             viewer.loadModelGltf(Car3DModel.gltf()) { uri -> Car3DModel.resource(uri, plate) }
-            val asset = viewer.asset ?: return
+            val asset = viewer.asset ?: run {
+                SelfDiag.log("car3d", "3D model açılmadı (asset=null)")
+                return
+            }
             // Model Z-yuxarıdır (AVM) → Y-yuxarı; mərkəzə gətir, ölçünü normallaşdır
             val bb = asset.boundingBox
             val c = bb.center; val h = bb.halfExtent
