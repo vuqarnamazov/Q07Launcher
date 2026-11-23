@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import androidx.security.crypto.MasterKeys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,7 +97,7 @@ object VehicleTelemetryReader {
         if (level != null && cap != null && cap > 0f) put("battery", (level / cap * 100f).toInt().coerceIn(0, 100), Src.CAR)
         num(RANGE_REMAINING)?.let { if (it >= 0f) put("range", (it / 1000f).toInt(), Src.CAR) }
         num(ENV_OUTSIDE_TEMPERATURE)?.let { if (it in -50f..70f) put("outer", it, Src.CAR) }
-        HVAC_AREAS.firstNotNullOfOrNull { a -> num(HVAC_TEMPERATURE_CURRENT, a)?.takeIf { it in -40f..80f } }
+        HVAC_AREAS.asSequence().mapNotNull { a -> num(HVAC_TEMPERATURE_CURRENT, a)?.takeIf { it in -40f..80f } }.firstOrNull()
             ?.let { put("inner", it, Src.CAR) }
         CarApi.gearName(CarApi.read(GEAR_SELECTION) ?: CarApi.read(CURRENT_GEAR))?.let { put("gear", it, Src.CAR) }
         num(EV_BATTERY_INSTANTANEOUS_CHARGE_RATE)?.let { put("rate", it / 1_000_000f, Src.CAR) }
@@ -215,9 +215,9 @@ object VehicleTelemetryReader {
 
     // ---------------- 3) şifrələnmiş keş ----------------
     private fun openPrefs(c: Context): SharedPreferences = try {
-        val key = MasterKey.Builder(c).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+        val alias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
         EncryptedSharedPreferences.create(
-            c, "q07_telemetry_secure", key,
+            "q07_telemetry_secure", alias, c,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
