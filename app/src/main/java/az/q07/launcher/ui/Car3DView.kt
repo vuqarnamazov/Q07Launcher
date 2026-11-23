@@ -107,25 +107,38 @@ object Car3DModel {
         ByteBuffer.allocateDirect(b.size).order(ByteOrder.nativeOrder()).put(b).also { it.flip() }
 }
 
-@Composable
-fun Car3DView(modifier: Modifier = Modifier) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    androidx.compose.runtime.LaunchedEffect(Unit) { az.q07.launcher.data.CarLook.load(ctx) }
-    val plate by az.q07.launcher.data.CarLook.plate.collectAsState()
-    val color by az.q07.launcher.data.CarLook.colorIndex.collectAsState()
-    // Nömrə dəyişəndə model yenidən qurulur; rəng isə canlı dəyişir
-    androidx.compose.runtime.key(plate) {
-        AndroidView(
-            factory = { c -> Car3DTextureView(c, plate) },
-            modifier = modifier,
-            update = { it.setBodyColor(az.q07.launcher.data.CarLook.colors.getOrNull(color)?.rgb) },
-            onRelease = { it.release() }
-        )
+/**
+ * 3D görünüş prosesdə BİR dəfə yaradılır və saxlanır (Filament modeli yarımçıq silinəndə çökür).
+ * Səhifə dəyişəndə eyni view yenidən qoşulur; nömrə dəyişəndə model yüklənmə bitəndən sonra yenilənir.
+ */
+object Car3DHolder {
+    private var view: Car3DTextureView? = null
+    fun get(context: Context): Car3DTextureView {
+        az.q07.launcher.data.CarLook.load(context)
+        val v = view ?: Car3DTextureView(context.applicationContext, az.q07.launcher.data.CarLook.plate.value).also { view = it }
+        (v.parent as? android.view.ViewGroup)?.removeView(v)
+        return v
     }
 }
 
+@Composable
+fun Car3DView(modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val plate by az.q07.launcher.data.CarLook.plate.collectAsState()
+    val color by az.q07.launcher.data.CarLook.colorIndex.collectAsState()
+    AndroidView(
+        factory = { Car3DHolder.get(ctx) },
+        modifier = modifier,
+        update = {
+            it.setBodyColor(az.q07.launcher.data.CarLook.colors.getOrNull(color)?.rgb)
+            it.requestPlate(plate)
+        },
+        onRelease = { (it.parent as? android.view.ViewGroup)?.removeView(it) } // silinmir — yenidən istifadə olunur
+    )
+}
+
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
-class Car3DTextureView(context: Context, private val plate: String) : TextureView(context), Choreographer.FrameCallback {
+class Car3DTextureView(context: Context, private var plate: String) : TextureView(context), Choreographer.FrameCallback {
 
     companion object { init { Utils.init() } }
 
@@ -203,6 +216,19 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
     }
 
     private var bodyColor: Int? = null
+    private var pendingPlate: String? = null
+
+    /** Nömrə dəyişdi — model yalnız yükləmə tam bitəndə yenidən qurulur (yarımçıq silmək çökdürür) */
+    fun requestPlate(p: String) { if (p != plate) pendingPlate = p }
+
+    private fun reloadIfPending() {
+        val p = pendingPlate ?: return
+        if (viewer.asset != null && viewer.progress < 1f) return
+        pendingPlate = null
+        plate = p
+        runCatching { viewer.destroyModel() }
+        load()
+    }
 
     /** Kuzov rəngi: "Paint" materialının baseColorFactor-u (toxuma ilə vurulur); null = zavod */
     fun setBodyColor(rgb: Int?) {
@@ -240,6 +266,7 @@ class Car3DTextureView(context: Context, private val plate: String) : TextureVie
         lastFrame = now
         if (now - lastTouch > 4000) { spinDeg = (spinDeg + dt * 12f) % 360f; applyTransform() }
         runCatching { viewer.render(frameTimeNanos) }
+        reloadIfPending()
     }
 
     fun release() {
