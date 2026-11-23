@@ -7,6 +7,8 @@ import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.TextureView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import az.q07.launcher.data.SelfDiag
@@ -52,8 +54,10 @@ object Car3DModel {
     fun gltf(): ByteBuffer = direct(File(GLTF).readBytes())
 
     /** glTF daxilindəki fayl adları: .bin modelin yanında, şəkillər res/ altında (.pkm əvəzinə .png) */
-    fun resource(uri: String): ByteBuffer? {
+    fun resource(uri: String, plate: String = ""): ByteBuffer? {
         val u = uri.substringBefore('?')
+        // Öz nömrə lövhəmiz
+        if (plate.isNotBlank() && u.contains("LicencePlate", ignoreCase = true)) return direct(az.q07.launcher.data.CarLook.platePng(plate))
         // .pkm (ETC sıxılmış) Filament tərəfindən oxunmur — həmişə yanındakı .png götürülür
         val png = u.replace(Regex("\\.pkm$"), ".png")
         val candidates = if (png != u) listOf(RES + png, RES + "model/car/" + png)
@@ -68,15 +72,23 @@ object Car3DModel {
 
 @Composable
 fun Car3DView(modifier: Modifier = Modifier) {
-    AndroidView(
-        factory = { ctx -> Car3DTextureView(ctx) },
-        modifier = modifier,
-        onRelease = { it.release() }
-    )
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { az.q07.launcher.data.CarLook.load(ctx) }
+    val plate by az.q07.launcher.data.CarLook.plate.collectAsState()
+    val color by az.q07.launcher.data.CarLook.colorIndex.collectAsState()
+    // Nömrə dəyişəndə model yenidən qurulur; rəng isə canlı dəyişir
+    androidx.compose.runtime.key(plate) {
+        AndroidView(
+            factory = { c -> Car3DTextureView(c, plate) },
+            modifier = modifier,
+            update = { it.setBodyColor(az.q07.launcher.data.CarLook.colors.getOrNull(color)?.rgb) },
+            onRelease = { it.release() }
+        )
+    }
 }
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
-class Car3DTextureView(context: Context) : TextureView(context), Choreographer.FrameCallback {
+class Car3DTextureView(context: Context, private val plate: String) : TextureView(context), Choreographer.FrameCallback {
 
     companion object { init { Utils.init() } }
 
@@ -95,12 +107,13 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
 
     init {
         val manipulator = Manipulator.Builder()
-            .targetPosition(0f, 0f, -4f)
-            .orbitHomePosition(0f, 1.25f, -0.55f)
+            .targetPosition(0f, -0.15f, -4f)
+            .orbitHomePosition(0f, 0.75f, -1.75f)
             .zoomSpeed(0.02f)
             .orbitSpeed(0.006f, 0.006f)
             .build(Manipulator.Mode.ORBIT)
         viewer = ModelViewer(this, engine, uiHelper, manipulator)
+        viewer.cameraFocalLength = 34f   // maşın kadrı daha çox doldursun
         viewer.view.blendMode = View.BlendMode.TRANSLUCENT
         viewer.renderer.clearOptions = viewer.renderer.clearOptions.apply {
             clear = true
@@ -126,7 +139,7 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
         // Yükləmə + ilk kadrlar bitənə qədər "loading" bayrağı qalır (native çökmədən qorunma)
         Car3DModel.markLoading(context, true)
         try {
-            viewer.loadModelGltf(Car3DModel.gltf()) { uri -> Car3DModel.resource(uri) }
+            viewer.loadModelGltf(Car3DModel.gltf()) { uri -> Car3DModel.resource(uri, plate) }
             val asset = viewer.asset ?: return
             // Model Z-yuxarıdır (AVM) → Y-yuxarı; mərkəzə gətir, ölçünü normallaşdır
             val bb = asset.boundingBox
@@ -139,9 +152,28 @@ class Car3DTextureView(context: Context) : TextureView(context), Choreographer.F
             android.opengl.Matrix.translateM(m, 0, -c[0], -c[1], -c[2])
             base = m
             applyTransform()
+            setBodyColor(bodyColor)
             SelfDiag.log("car3d", "zavod 3D modeli yükləndi (${asset.entities.size} hissə)")
         } catch (t: Throwable) {
             SelfDiag.log("car3d", "3D model yüklənmədi: ${t.javaClass.simpleName}: ${t.message}")
+        }
+    }
+
+    private var bodyColor: Int? = null
+
+    /** Kuzov rəngi: "Paint" materialının baseColorFactor-u (toxuma ilə vurulur); null = zavod */
+    fun setBodyColor(rgb: Int?) {
+        bodyColor = rgb
+        val asset = viewer.asset ?: return
+        val r: Float; val g: Float; val b: Float
+        if (rgb == null) { r = 1f; g = 1f; b = 1f } else {
+            // toxuma açıq-boz olduğu üçün rəngi bir az gücləndiririk
+            r = ((rgb shr 16) and 0xFF) / 255f * 1.25f; g = ((rgb shr 8) and 0xFF) / 255f * 1.25f; b = (rgb and 0xFF) / 255f * 1.25f
+        }
+        runCatching {
+            asset.instance.materialInstances.filter { it.name.equals("Paint", true) }.forEach { mi ->
+                mi.setParameter("baseColorFactor", com.google.android.filament.Colors.RgbaType.SRGB, r, g, b, 1f)
+            }
         }
     }
 

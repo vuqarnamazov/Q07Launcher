@@ -1,5 +1,7 @@
 package az.q07.launcher.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
@@ -195,6 +197,20 @@ private fun SwitchRow(text: String, hint: String?, checked: Boolean, onChange: (
 
 @Composable
 private fun LookSection() {
+    // ---- 3D maşın: nömrə ----
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) { az.q07.launcher.data.CarLook.load(ctx) }
+    val savedPlate by az.q07.launcher.data.CarLook.plate.collectAsState()
+    var plateText by remember(savedPlate) { mutableStateOf(savedPlate) }
+    Label("Maşının nömrəsi", "3D maşının ön və arxa nömrə lövhəsində görünür (məs. 10-AB-123)")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        androidx.compose.material3.OutlinedTextField(
+            value = plateText, onValueChange = { plateText = it.uppercase().take(12) },
+            singleLine = true, modifier = Modifier.width(320.dp)
+        )
+        OutlinedButton(onClick = { az.q07.launcher.data.CarLook.setPlate(ctx, plateText) }) { Text("Yadda saxla") }
+    }
+    Spacer(Modifier.height(16.dp))
     Label("Mövzu", "Launcher-in bütün rəngləri dəyişir")
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         az.q07.launcher.ui.theme.LauncherTheme.entries.forEach { t ->

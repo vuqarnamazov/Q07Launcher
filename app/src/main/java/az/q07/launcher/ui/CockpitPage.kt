@@ -1,5 +1,7 @@
 package az.q07.launcher.ui
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Palette
 import az.q07.launcher.ui.theme.AnalogGauge
 import az.q07.launcher.ui.theme.InfoCard
 import az.q07.launcher.ui.theme.LauncherTheme
@@ -188,7 +190,7 @@ internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
             }
             // qalan yer: avtomobil + chip-lər; ekran kiçiləndə sürüşür, heç nə itmir
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                val carH = (maxHeight * 0.46f).coerceIn(150.dp, 340.dp)
+                val carH = (maxHeight * 0.56f).coerceIn(170.dp, 440.dp)
                 Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -412,6 +414,36 @@ private fun RotatingCar(modifier: Modifier) {
                 "${v["speed"]?.toInt() ?: "—"} km/s · SOC ${v["soc"]?.let { String.format(Locale.US, "%.0f", it) } ?: "—"}%",
                 Modifier.align(Alignment.TopCenter)
             )
+            if (use3d) CarColorPicker(Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+/** 🎨 — kuzov rəngini seçmək (3D maşın üçün) */
+@Composable
+private fun CarColorPicker(modifier: Modifier) {
+    val context = LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    val sel by az.q07.launcher.data.CarLook.colorIndex.collectAsState()
+    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            Modifier.size(44.dp).clip(CircleShape).background(Color(0x99000000))
+                .border(1.dp, CarColors.Border, CircleShape).clickable { open = !open },
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Filled.Palette, "Rəng", tint = CarColors.TextPrimary, modifier = Modifier.size(24.dp)) }
+        if (open) Row(
+            Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xCC000000)).padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            az.q07.launcher.data.CarLook.colors.forEachIndexed { i, c ->
+                Box(
+                    Modifier.size(34.dp).clip(CircleShape)
+                        .background(c.rgb?.let { Color(it) } ?: Color(0xFF8A94A6))
+                        .border(if (i == sel) 3.dp else 1.dp, if (i == sel) CarColors.Accent else Color(0x55FFFFFF), CircleShape)
+                        .clickable { az.q07.launcher.data.CarLook.setColor(context, i) },
+                    contentAlignment = Alignment.Center
+                ) { if (c.rgb == null) Text("Z", fontSize = 12.sp, color = Color.White) }
+            }
         }
     }
 }
