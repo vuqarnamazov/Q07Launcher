@@ -103,6 +103,7 @@ fun VehicleScannerScreen(onClose: () -> Unit) {
             ScIconBtn(Icons.Filled.Close, "Bağla", CarColors.TextPrimary, onClose)
         }
         ScannerModeControl()
+        TamQeydLine()
         ScChipRow { ScTab.values().forEach { t -> ScChip(t.title, t == tab) { tab = t } } }
         info?.let { Text(it, fontSize = 13.sp, color = CarColors.Green) }
         PlayerStatusLine()
@@ -348,4 +349,13 @@ private fun ImportTab(pick: (FlowImporter.Candidate) -> Unit, onInfo: (String) -
             }
         }
     }
+}
+
+/** Tam qeyd vəziyyəti (fonda daim yazılır) */
+@Composable
+private fun TamQeydLine() {
+    var st by remember { mutableStateOf(az.q07.scanner.rec.TamQeyd.status()) }
+    LaunchedEffect(Unit) { while (true) { delay(3000); st = az.q07.scanner.rec.TamQeyd.status() } }
+    Text("● Tam qeyd: $st", fontSize = 13.sp,
+        color = if (az.q07.scanner.rec.TamQeyd.running) CarColors.Green else CarColors.TextSecondary)
 }

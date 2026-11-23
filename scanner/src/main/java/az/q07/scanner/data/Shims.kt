@@ -25,14 +25,23 @@ class DriveModeService : AccessibilityService() {
         FactoryBridge.service = this
         FullVehicleScannerManager.init(applicationContext)
         SelfDiag.log("service", "Skaner xidməti qoşuldu")
+        // Tam qeyd: xidmət işlədikcə (sistem onu daim saxlayır) maşındakı hər şey yazılır
+        runCatching { az.q07.scanner.rec.TamQeyd.start(applicationContext) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event != null) runCatching { FullVehicleScannerManager.onEvent(this, event) }
+        if (event != null) {
+            runCatching { az.q07.scanner.rec.TamQeyd.onAccessibility(event) }
+            runCatching { FullVehicleScannerManager.onEvent(this, event) }
+        }
     }
 
     override fun onInterrupt() {}
-    override fun onDestroy() { FactoryBridge.service = null; super.onDestroy() }
+    override fun onDestroy() {
+        FactoryBridge.service = null
+        runCatching { az.q07.scanner.rec.TamQeyd.stop() }
+        super.onDestroy()
+    }
 
     fun scannerRoots(): List<AccessibilityNodeInfo> = buildList {
         windows?.forEach { w -> w.root?.let { add(it) } }
