@@ -32,6 +32,9 @@ object SidePanel {
         private set
 
     private var view: View? = null
+    private var lpRef: WindowManager.LayoutParams? = null
+    private var fullHeight = 0
+    private var panelTop = 0
     private val main = Handler(Looper.getMainLooper())
     private var ticker: Runnable? = null
 
@@ -64,8 +67,27 @@ object SidePanel {
 
     /** Pəncərələr dəyişəndə (freeform bağlandı/açıldı) paneli yenilə */
     fun onWindowsChanged(service: DriveModeService) {
-        if (freeformOnTop(service)) { show(service); return }
-        if (showing && lastPkg !in panelPackages) hide(service)
+        if (freeformOnTop(service)) { show(service); fitAboveKeyboard(service); return }
+        if (showing && lastPkg !in panelPackages) hide(service) else fitAboveKeyboard(service)
+    }
+
+    /**
+     * Klaviatura (sistem IME pəncərəsi) bütün en boyu açılır — panel onun üstünü örtməsin deyə
+     * klaviatura görünəndə panel qısalır (klaviaturanın üstündə bitir), bağlananda əvvəlki ölçüyə qayıdır.
+     */
+    fun fitAboveKeyboard(service: DriveModeService) {
+        val v = view ?: return
+        val lp = lpRef ?: return
+        val imeTop = runCatching {
+            val r = android.graphics.Rect()
+            service.windows.firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+                ?.let { it.getBoundsInScreen(r); r.top }
+        }.getOrNull()
+        val target = if (imeTop != null && imeTop < panelTop + fullHeight) (imeTop - panelTop - 8).coerceAtLeast(0) else fullHeight
+        if (lp.height == target) return
+        lp.height = target
+        v.visibility = if (target < 120) View.INVISIBLE else View.VISIBLE
+        runCatching { (service.getSystemService(Context.WINDOW_SERVICE) as WindowManager).updateViewLayout(v, lp) }
     }
 
     private fun dp(c: Context, v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.resources.displayMetrics).toInt()
@@ -148,6 +170,8 @@ object SidePanel {
         val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         if (runCatching { wm.addView(root, lp) }.isFailure) return
         view = root
+        lpRef = lp; fullHeight = height; panelTop = top
+        fitAboveKeyboard(service)
         showing = true
 
         val fmtT = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -166,7 +190,7 @@ object SidePanel {
 
     fun hide(service: DriveModeService) {
         val v = view ?: return
-        view = null; showing = false
+        view = null; showing = false; lpRef = null
         ticker?.let { main.removeCallbacks(it) }; ticker = null
         runCatching { (service.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(v) }
     }

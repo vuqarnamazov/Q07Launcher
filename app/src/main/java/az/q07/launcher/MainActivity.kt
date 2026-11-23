@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyExtras(intent)
         super.onCreate(savedInstanceState)
 
         AppSettings.init(applicationContext)
@@ -80,6 +81,16 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumeTick++
+    }
+
+    /** adb ilə: am start -n az.q07.launcher/.MainActivity --es q07_plate "90-AA-000" (nömrə repoda saxlanmır) */
+    private fun applyExtras(i: android.content.Intent?) {
+        i?.getStringExtra("q07_plate")?.let { az.q07.launcher.data.CarLook.setPlate(applicationContext, it) }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        applyExtras(intent)
     }
 
     override fun onStart() {
