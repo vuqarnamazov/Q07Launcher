@@ -34,6 +34,7 @@ import az.q07.launcher.data.AppEntry
 import az.q07.launcher.data.AppRepository
 import az.q07.launcher.data.AppSettings
 import az.q07.launcher.ui.theme.CarColors
+import az.q07.launcher.ui.theme.themeBackground
 
 /**
  * Q07 ekranı: 15.4", 2560×1600 (2.5K), fırlana bilən.
@@ -52,7 +53,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(CarColors.Background)
+            .themeBackground()
     ) {
         val landscape = maxWidth >= maxHeight
         val longSide = if (landscape) maxWidth.value else maxHeight.value
