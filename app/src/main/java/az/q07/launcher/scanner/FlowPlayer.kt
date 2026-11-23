@@ -72,12 +72,12 @@ object FlowPlayer {
     private fun onScreen(svc: DriveModeService, pkg: String) = svc.scannerRoots().any { it.packageName == pkg }
 
     private suspend fun openWindow(ctx: Context, s: FlowStep): Boolean {
-        if (RecorderScannerManager.foregroundPackage == s.packageName && RecorderScannerManager.foregroundClass == s.className) return true
+        if (FullVehicleScannerManager.foregroundPackage == s.packageName && FullVehicleScannerManager.foregroundClass == s.className) return true
         val launched = (s.className.isNotBlank() &&
             QuickActions.start(ctx, Intent(Intent.ACTION_MAIN).setComponent(ComponentName(s.packageName, s.className)))) ||
             QuickActions.launchPackage(ctx, s.packageName)
         if (!launched) return false
-        return waitFor(5000) { RecorderScannerManager.foregroundPackage == s.packageName }
+        return waitFor(5000) { FullVehicleScannerManager.foregroundPackage == s.packageName }
     }
 
     private suspend fun click(ctx: Context, svc: DriveModeService, s: FlowStep): Boolean {

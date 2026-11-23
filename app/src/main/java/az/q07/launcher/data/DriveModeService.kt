@@ -186,8 +186,8 @@ class DriveModeService : AccessibilityService() {
 
     // ---------------- hadisələr ----------------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // İzləmə Skaneri: kliklər və pəncərə keçidləri (skaner sönülüdürsə yalnız ön plan izlənir)
-        if (event != null) runCatching { az.q07.launcher.scanner.RecorderScannerManager.onEvent(this, event) }
+        // Tam Skaner: pəncərələr, elementlər, kliklər (sönülüdürsə yalnız ön plan izlənir)
+        if (event != null) runCatching { az.q07.launcher.scanner.FullVehicleScannerManager.onEvent(this, event) }
         if (event?.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) return
         // Daxili göstəricilər: status zolağı və zavod ekranlarındakı km/h, %, km, °C mətnləri
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {

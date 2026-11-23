@@ -49,8 +49,8 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         az.q07.launcher.data.VehicleTelemetryReader.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
-        // İzləmə Skaneri: bazalar + əvvəl aktiv idisə xidməti bərpa et
-        az.q07.launcher.scanner.RecorderScannerManager.restoreIfNeeded(applicationContext)
+        // Tam Skaner: bazalar + Fon İzləməsi əvvəl açıq idisə xidməti bərpa et
+        az.q07.launcher.scanner.FullVehicleScannerManager.restoreIfNeeded(applicationContext)
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

@@ -18,13 +18,15 @@ data class LearnedFunction(
     val fingerprint: String = RecordedFlow.fingerprintOf(steps),
     val stepDelayMs: Long = 800,
     val runs: Int = 0,
+    /** kokpitin sürətli idarəetmə zolağında göstərilsin */
+    val pinned: Boolean = false,
     val addedAt: Long = System.currentTimeMillis()
 ) {
     val isFlow: Boolean get() = steps.size > 1
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("src", sourceFlowId ?: "").put("fp", fingerprint)
-        .put("delay", stepDelayMs).put("runs", runs).put("added", addedAt)
+        .put("delay", stepDelayMs).put("runs", runs).put("pin", pinned).put("added", addedAt)
         .put("steps", JSONArray().apply { steps.forEach { put(it.toJson()) } })
 
     companion object {
@@ -35,7 +37,7 @@ data class LearnedFunction(
                 id = o.getString("id"), name = o.optString("name"), steps = steps,
                 sourceFlowId = o.optString("src").ifBlank { null },
                 fingerprint = o.optString("fp").ifBlank { RecordedFlow.fingerprintOf(steps) },
-                stepDelayMs = o.optLong("delay", 800), runs = o.optInt("runs"), addedAt = o.optLong("added")
+                stepDelayMs = o.optLong("delay", 800), runs = o.optInt("runs"), pinned = o.optBoolean("pin"), addedAt = o.optLong("added")
             )
         }
     }
@@ -66,10 +68,13 @@ object LearnedFunctionsRepository {
 
     /** Eyni addımlar artıq varsa — mövcud olanı qaytarır (dublikat yoxdur) */
     @Synchronized
-    fun add(name: String, steps: List<FlowStep>, sourceFlowId: String?): Pair<LearnedFunction, Boolean> {
+    fun add(name: String, steps: List<FlowStep>, sourceFlowId: String?, pinned: Boolean = false): Pair<LearnedFunction, Boolean> {
         val fp = RecordedFlow.fingerprintOf(steps)
-        _items.value.firstOrNull { it.fingerprint == fp }?.let { return it to false }
-        val f = LearnedFunction(UUID.randomUUID().toString(), name, steps, sourceFlowId, fp)
+        _items.value.firstOrNull { it.fingerprint == fp }?.let { old ->
+            if (pinned && !old.pinned) setPinned(old.id, true)
+            return old to false
+        }
+        val f = LearnedFunction(UUID.randomUUID().toString(), name, steps, sourceFlowId, fp, pinned = pinned)
         _items.value = _items.value + f
         save()
         return f to true
@@ -87,6 +92,12 @@ object LearnedFunctionsRepository {
     @Synchronized
     fun setDelay(id: String, ms: Long) {
         _items.value = _items.value.map { if (it.id == id) it.copy(stepDelayMs = ms.coerceIn(200, 5000)) else it }
+        save()
+    }
+
+    @Synchronized
+    fun setPinned(id: String, on: Boolean) {
+        _items.value = _items.value.map { if (it.id == id) it.copy(pinned = on) else it }
         save()
     }
 

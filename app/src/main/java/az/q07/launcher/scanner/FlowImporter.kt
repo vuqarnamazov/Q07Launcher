@@ -3,58 +3,106 @@ package az.q07.launcher.scanner
 import android.content.Context
 
 /**
- * Skanerin bazasından launcher-ə funksiya/gedişat "çəkib" əlavə edir.
- *  - ad / açar söz ilə axtarış: [search], [importBest]
- *  - siyahıdan seçməklə: [import]
- * Əlavə olunan element [LearnedFunctionsRepository]-yə düşür və 1 toxunuşla işlədilir.
+ * «Funksiya / Gedişat Götür və Əlavə Et».
+ * Skaner bazasından ([VehicleStructureRepository]) sorğu ilə:
+ *  - qeydə alınmış funksiya və gedişatları ([RecordedFlow]),
+ *  - ekran xəritəsindəki düymələri — öyrənilmiş keçid yolu ilə birlikdə ([ActionPath])
+ * tapır və [LearnedFunctionsRepository]-yə (istəsən, kokpitin sürətli idarəetməsinə də) əlavə edir.
  */
 object FlowImporter {
 
-    data class Match(val flow: RecordedFlow, val score: Int, val alreadyAdded: Boolean)
+    sealed class Candidate {
+        abstract val name: String
+        abstract val steps: List<FlowStep>
+        abstract val score: Int
+        abstract val fingerprint: String
+        abstract val subtitle: String
 
-    /** Açar sözlərə görə sıralanmış uyğunluqlar (ad, addım mətnləri, viewId, tətbiq adı daxil) */
-    fun search(context: Context, query: String, kind: RecordedFlow.Kind? = null): List<Match> {
-        val words = normalize(query).split(' ').filter { it.isNotBlank() }
-        val all = RecordedFlowRepository.flows.value.filter { kind == null || it.kind == kind }
-        if (words.isEmpty()) return all.sortedByDescending { it.count }
-            .map { Match(it, 0, LearnedFunctionsRepository.contains(it.fingerprint)) }
-        return all.mapNotNull { f ->
-            val name = normalize(f.name)
-            val hay = buildString {
-                append(name).append(' ')
-                f.packages.forEach { append(normalize(RecorderScannerManager.appLabel(context, it))).append(' ').append(it.lowercase()).append(' ') }
-                f.steps.forEach {
-                    append(normalize(it.text)).append(' ').append(normalize(it.contentDescription)).append(' ')
-                    append(it.viewIdResName.substringAfter(":id/").lowercase().replace('_', ' ')).append(' ')
-                    append(it.className.substringAfterLast('.').lowercase()).append(' ')
-                }
-            }
-            var score = 0
-            for (w in words) {
-                score += when {
-                    name.split(' ').any { it == w } -> 30
-                    name.contains(w) -> 20
-                    hay.contains(w) -> 8
-                    else -> return@mapNotNull null // bütün sözlər tapılmalıdır
-                }
-            }
-            score += minOf(f.count, 20)                          // tez-tez istifadə olunan önə
-            if (f.kind == RecordedFlow.Kind.FUNCTION) score += 2  // eyni bal — tək addım sadədir
-            Match(f, score, LearnedFunctionsRepository.contains(f.fingerprint))
-        }.sortedByDescending { it.score }
+        data class Recorded(val flow: RecordedFlow, override val score: Int) : Candidate() {
+            override val name get() = flow.name
+            override val steps get() = flow.steps
+            override val fingerprint get() = flow.fingerprint
+            override val subtitle get() = "${flow.kind.label} · ×${flow.count} · ${flow.steps.size} addım"
+        }
+
+        data class Button(val screen: ScreenNodeMap, val node: NodeInfo, val path: ActionPath, val appLabel: String, override val score: Int) : Candidate() {
+            override val name get() = "$appLabel: ${node.label()}"
+            override val steps get() = path.steps
+            override val fingerprint get() = RecordedFlow.fingerprintOf(path.steps)
+            override val subtitle get() = "Düymə · ${screen.shortName} · yol ${path.steps.size} addım" +
+                (if (path.complete) "" else " (yolun bir hissəsi naməlum)") + " · ${node.clickCount} klik / ${node.seenCount} görülüb"
+        }
     }
 
-    /** Seçilmiş qeydi launcher-in icra siyahısına əlavə et. Qaytarır: (funksiya, yenidirmi) */
-    fun import(flow: RecordedFlow, customName: String? = null): Pair<LearnedFunction, Boolean> =
-        LearnedFunctionsRepository.add(customName?.takeIf { it.isNotBlank() } ?: flow.name, flow.steps, flow.id)
+    enum class Source { ALL, FUNCTIONS, FLOWS, BUTTONS;
+        val label: String get() = when (this) { ALL -> "Hamısı"; FUNCTIONS -> "Funksiyalar"; FLOWS -> "Gedişatlar"; BUTTONS -> "Düymələr (xəritə)" }
+    }
 
-    fun import(flowId: String): Pair<LearnedFunction, Boolean>? = RecordedFlowRepository.get(flowId)?.let { import(it) }
+    fun search(context: Context, query: String, source: Source = Source.ALL, limit: Int = 40): List<Candidate> {
+        val words = normalize(query).split(' ').filter { it.isNotBlank() }
+        val out = mutableListOf<Candidate>()
 
-    /** Ad/açar söz ilə ən uyğununu tap və birbaşa əlavə et */
-    fun importBest(context: Context, query: String, kind: RecordedFlow.Kind? = null): Pair<LearnedFunction, Boolean>? =
-        search(context, query, kind).firstOrNull()?.let { import(it.flow, null) }
+        if (source != Source.BUTTONS) {
+            VehicleStructureRepository.flows.value
+                .filter { source == Source.ALL || (source == Source.FUNCTIONS) == (it.kind == RecordedFlow.Kind.FUNCTION) }
+                .forEach { f ->
+                    val hay = buildString {
+                        f.packages.forEach { append(normalize(FullVehicleScannerManager.appLabel(context, it))).append(' ').append(it.lowercase()).append(' ') }
+                        f.steps.forEach { append(stepHay(it)) }
+                    }
+                    score(words, normalize(f.name), hay)?.let { s -> out += Candidate.Recorded(f, s + minOf(f.count, 20)) }
+                }
+        }
+        if (source == Source.ALL || source == Source.BUTTONS) {
+            // boş sorğuda yalnız ən çox istifadə olunan düymələr (bütün xəritə çox böyükdür)
+            VehicleStructureRepository.screens.value.values.forEach { scr ->
+                val app = FullVehicleScannerManager.appLabel(context, scr.packageName)
+                scr.nodes.filter { it.isClickable }.forEach { n ->
+                    if (words.isEmpty() && n.clickCount == 0) return@forEach
+                    val hay = "${normalize(app)} ${scr.packageName.lowercase()} ${scr.shortName.lowercase()} " +
+                        n.viewIdResName.substringAfter(":id/").lowercase().replace('_', ' ')
+                    score(words, normalize(n.label()), hay)?.let { s ->
+                        val path = VehicleStructureRepository.findPath(scr.id, n.key) ?: return@let
+                        out += Candidate.Button(scr, n, path, app, s + minOf(n.clickCount * 2, 20) + if (path.complete) 3 else 0)
+                    }
+                }
+            }
+        }
+        // eyni addımlar (məs. klik funksiyası = düymə yolu) — yalnız ən yüksək bal qalsın
+        return out.sortedByDescending { it.score }.distinctBy { it.fingerprint }.take(limit)
+    }
 
-    private fun normalize(s: String): String = s.lowercase()
+    /** Əlavə et: (öyrənilmiş funksiya, yenidirmi) */
+    fun import(c: Candidate, customName: String? = null, pinToQuick: Boolean = false): Pair<LearnedFunction, Boolean> =
+        LearnedFunctionsRepository.add(
+            customName?.takeIf { it.isNotBlank() } ?: c.name, c.steps,
+            (c as? Candidate.Recorded)?.flow?.id, pinToQuick
+        )
+
+    /** Sorğu ilə ən uyğununu tap və birbaşa əlavə et */
+    fun importBest(context: Context, query: String, source: Source = Source.ALL, pinToQuick: Boolean = false): Pair<LearnedFunction, Boolean>? =
+        search(context, query, source, 1).firstOrNull()?.let { import(it, null, pinToQuick) }
+
+    fun isAdded(c: Candidate) = LearnedFunctionsRepository.contains(c.fingerprint)
+
+    private fun stepHay(s: FlowStep) = "${normalize(s.text)} ${normalize(s.contentDescription)} " +
+        "${s.viewIdResName.substringAfter(":id/").lowercase().replace('_', ' ')} ${s.className.substringAfterLast('.').lowercase()} "
+
+    /** bütün sözlər tapılmalıdır; adda tapılan daha çox bal alır */
+    private fun score(words: List<String>, name: String, hay: String): Int? {
+        if (words.isEmpty()) return 0
+        var s = 0
+        val nameWords = name.split(' ')
+        for (w in words) s += when {
+            nameWords.any { it == w } -> 30
+            name.contains(w) -> 20
+            hay.contains(w) -> 8
+            else -> return null
+        }
+        return s
+    }
+
+    fun normalize(s: String): String = s.lowercase()
         .replace('ə', 'e').replace('ı', 'i').replace('ö', 'o').replace('ü', 'u')
         .replace('ş', 's').replace('ç', 'c').replace('ğ', 'g')
         .replace(Regex("[^\\p{L}\\p{N} ]"), " ").replace(Regex("\\s+"), " ").trim()

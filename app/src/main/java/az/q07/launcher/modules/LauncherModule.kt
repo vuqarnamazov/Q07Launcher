@@ -39,7 +39,7 @@ object ModuleRegistry {
         VoiceNoteModule,
         NetworkModule,
         SystemInfoModule,
-        ScannerModule,
+        VehicleScannerModule,
         // MyModule,  ← yeni modulları bura əlavə et
     )
 

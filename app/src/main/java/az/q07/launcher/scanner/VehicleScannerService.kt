@@ -10,9 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import az.q07.launcher.MainActivity
-import az.q07.launcher.data.CarApi
-import az.q07.launcher.data.ObdMonitor
+import az.q07.launcher.ui.VehicleScannerActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,15 +20,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * İzləmə rejimi açıq olduqca işləyən ön plan xidməti (bildirişlə).
- * Prosesi canlı saxlayır, hər 2 saniyədən bir sürəti oxuyub "Hərəkətdə / Dayanıb" vəziyyətini yeniləyir.
- * Hadisələrin özünü `DriveModeService` (xüsusi imkan xidməti) toplayır.
+ * Fon İzləməsi: ön plan xidməti (Android 11 — foregroundServiceType="dataSync").
+ * Prosesi canlı saxlayır, sürəti oxuyub Hərəkətdə/Dayanıb vəziyyətini yeniləyir; hadisələri `DriveModeService` toplayır.
  */
-class ScannerForegroundService : Service() {
+class VehicleScannerService : Service() {
     companion object {
-        const val CHANNEL = "scanner"
-        const val NOTIF_ID = 7307
-        const val ACTION_STOP = "az.q07.launcher.scanner.STOP"
+        const val CHANNEL = "full_scanner"
+        const val NOTIF_ID = 7308
+        const val ACTION_STOP = "az.q07.launcher.fullscanner.STOP"
     }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -41,38 +38,33 @@ class ScannerForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        RecorderScannerManager.init(this)
+        FullVehicleScannerManager.init(this)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "İzləmə Skaneri", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, "Tam Skaner — fon izləməsi", NotificationManager.IMPORTANCE_LOW)
         )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            RecorderScannerManager.setActive(this, false)
+            FullVehicleScannerManager.setMode(this, FullVehicleScannerManager.Mode.OFF)
             stopSelf(); return START_NOT_STICKY
         }
-        val n = build("İzləmə başladı")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else startForeground(NOTIF_ID, n)
+        val n = build("Fon izləməsi başladı")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        else startForeground(NOTIF_ID, n)
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
     }
 
     private suspend fun run() {
-        val carOk = runCatching { CarApi.init(this) }.getOrDefault(false)
         while (scope.isActive) {
-            val speed = (if (carOk) (CarApi.read(CarApi.PERF_VEHICLE_SPEED) as? Number)?.toDouble()?.times(3.6) else null)
-                ?: ObdMonitor.state.value.takeIf { it.connected }?.values?.get("speed")
-            RecorderScannerManager.updateMotion(speed)
-            val acc = RecorderScannerManager.isAccessibilityReady(this)
-            val text = if (!acc) "⚠ Xüsusi imkan xidməti aktiv deyil — hərəkətlər yazılmır"
-            else "${RecorderScannerManager.motion.value.label}" +
-                (speed?.let { " · ${it.toInt()} km/s" } ?: "") +
-                " · sessiya: ${RecorderScannerManager.session.value.size} addım" +
-                " · yazıldı: ${RecorderScannerManager.recordedThisRun.value}" +
-                " · baza: ${RecordedFlowRepository.flows.value.size}"
+            val speed = FullVehicleScannerManager.readSpeed(this)
+            FullVehicleScannerManager.updateMotion(speed)
+            val m = FullVehicleScannerManager
+            val r = VehicleStructureRepository
+            val text = if (!m.isAccessibilityReady(this)) "⚠ Xüsusi imkan xidməti aktiv deyil — heç nə öyrənilmir"
+            else "${m.motion.value.label}${speed?.let { " · ${it.toInt()} km/s" } ?: ""}" +
+                " · ${r.screens.value.size} ekran · ${r.edges.value.size} yol · ${r.flows.value.size} gedişat/funksiya"
             if (text != lastText) {
                 lastText = text
                 getSystemService(NotificationManager::class.java).notify(NOTIF_ID, build(text))
@@ -83,20 +75,19 @@ class ScannerForegroundService : Service() {
 
     private fun build(text: String): Notification {
         val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            this, 0, Intent(this, VehicleScannerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val stop = PendingIntent.getService(
-            this, 1, Intent(this, ScannerForegroundService::class.java).setAction(ACTION_STOP),
+            this, 1, Intent(this, VehicleScannerService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("Skaner İzləməsi: Aktiv")
+            .setContentTitle("Skaner: Fon İzləməsi")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
+            .setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Söndür", stop)
             .build()
@@ -104,7 +95,8 @@ class ScannerForegroundService : Service() {
 
     override fun onDestroy() {
         loop?.cancel()
-        RecorderScannerManager.commitSession("xidmət dayandı")
+        FullVehicleScannerManager.commitSession("xidmət dayandı")
+        VehicleStructureRepository.flushNow()
         super.onDestroy()
     }
 }

@@ -15,7 +15,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Hava, yeniləmə yoxlaması, OBD Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- İzləmə Skaneri: ön plan xidməti (bildirişlə) -->
+    <!-- Tam Skaner: Fon İzləməsi ön plan xidməti (bildirişlə) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- İkili şəbəkə: telefon hotspot (internet) + OBD Wi-Fi (lokal) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -115,11 +115,22 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- İzləmə Skaneri: düymə ilə aktivləşən ön plan xidməti -->
+        <!-- Tam Skaner: Fon İzləməsi ön plan xidməti -->
         <service
-            android:name=".scanner.ScannerForegroundService"
+            android:name=".scanner.VehicleScannerService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Tam Skaner ekranı (Açıq rejim) -->
+        <activity
+            android:name=".ui.VehicleScannerActivity"
+            android:exported="false"
+            android:label="Tam Skaner"
+            android:taskAffinity="az.q07.launcher.scanner"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            tools:ignore="LockedOrientationActivity" />
 
         <receiver
             android:name=".data.ReminderReceiver"
