@@ -339,13 +339,21 @@ class DriveModeService : AccessibilityService() {
         // 1) id ilə; 2) tapılmasa — əvvəl öyrənilmiş başlıq mətni ilə (zavod yeniləməsində id dəyişə bilər)
         val byId = root.findAccessibilityNodeInfosByViewId(id(c.anchorId)).firstOrNull()
         byId?.text?.toString()?.let { SelfDiag.learnTitle(c, it) }
-        val anchor = byId ?: SelfDiag.learnedTitle(c)?.let { t ->
-            root.findAccessibilityNodeInfosByText(t).firstOrNull { it.text?.toString() == t }
+        val anchor = byId ?: (SelfDiag.learnedTitle(c) ?: c.anchorText)?.let { t ->
+            root.findAccessibilityNodeInfosByText(t).firstOrNull { it.text?.toString()?.trim() == t }
                 ?.also { SelfDiag.log("selfheal", "${c.name}: id tapılmadı, başlıq mətni ilə tapıldı") }
         } ?: return emptyList()
         val a = bounds(anchor)
-        val below = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
+        var below = root.findAccessibilityNodeInfosByViewId(id("tv_tab_content"))
             .filter { val r = bounds(it); r.top >= a.bottom - 4 && r.top <= a.bottom + 260 }
+        // Seçimlər başqa komponentdədirsə — mətnlə tap (məs. «Avtomatik / Elektrik / Yanacaq»)
+        if (below.isEmpty() && c.anchorText != null) {
+            below = c.options.mapNotNull { o ->
+                root.findAccessibilityNodeInfosByText(o).firstOrNull { n ->
+                    val r = bounds(n); n.text?.toString()?.trim() == o && r.top >= a.bottom - 4 && r.top <= a.bottom + 260
+                }
+            }
+        }
         // yalnız başlığın altındakı İLK sıra (eyni hündürlük), seçim sayı qədər
         val firstTop = below.minOfOrNull { bounds(it).top } ?: return emptyList()
         val list = below.filter { abs(bounds(it).top - firstTop) < 24 }

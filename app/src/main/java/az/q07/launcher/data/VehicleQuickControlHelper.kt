@@ -22,8 +22,14 @@ enum class VehicleControl(
     val options: List<String>,
     val maskIds: List<String> = emptyList(),
     val sliderMaskId: String? = null,
-    val percents: List<Int> = emptyList()
+    val percents: List<Int> = emptyList(),
+    /** id tapılmasa başlığı bu mətnlə axtar (zavod ekranındakı yazı) */
+    val anchorText: String? = null
 ) {
+    ENERGY_MODE(
+        "Enerji rejimi (elektrik / benzin)", Kind.TABS, "tv_title_energy_mode",
+        listOf("Avtomatik", "Elektrik", "Yanacaq"), anchorText = "Enerji rejimi"
+    ),
     DRIVE_MODE(
         "Sürüş rejimi (qaz pedalı)", Kind.TABS, "item_drive_mode_often_title",
         listOf("Komfort", "Standart", "Sport")

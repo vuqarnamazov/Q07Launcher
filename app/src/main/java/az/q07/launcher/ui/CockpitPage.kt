@@ -195,6 +195,7 @@ internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    ControlChips(VehicleControl.ENERGY_MODE, compactTitle = "Enerji rejimi")
                     ControlChips(VehicleControl.DRIVE_MODE, compactTitle = "Sürüş")
                     ThemedCenterpiece(carH, onOpenModules)
                     ControlChips(VehicleControl.SUSPENSION, compactTitle = "Asqı")

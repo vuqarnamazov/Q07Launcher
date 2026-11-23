@@ -94,8 +94,9 @@ object DualNetworkManager {
         wifiPriority = prefs.getString("prio", "obd")!!
         startMonitoring()
         if (hotspotSsid.isNotBlank()) connectToPhoneHotspot(hotspotSsid, hotspotPass)
-        // OBD prioritetdədirsə — launcher açılan kimi avtomatik qoşul və saxla
-        if (autoStart && wifiPriority == "obd" && obdSsid.isNotBlank()) connectToObd(obdSsid, obdPass)
+        // OBD: «Cihaza qoşulsun?» pəncərəsi artıq avtomatik çıxmır.
+        // Sistem özü OBD Wi-Fi-dadırsa — səssiz istifadə et; yoxdursa yalnız «Qoş» düyməsi basılanda soruşulur.
+        if (autoStart && wifiPriority == "obd" && obdSsid.isNotBlank() && findSystemObdNetwork() != null) connectToObd(obdSsid, obdPass)
     }
 
     fun setPriority(p: String) {
