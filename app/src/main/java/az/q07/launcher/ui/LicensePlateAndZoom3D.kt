@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,12 +46,27 @@ fun InteractiveQ07ModelStage(
     var tempPlateInput by remember { mutableStateOf(plateText) }
 
     Box(
-        modifier = modifier.pointerInput(Unit) {
-            detectTransformGestures { _, pan, zoom, _ ->
-                scale = (scale * zoom).coerceIn(0.75f, 2.2f)
-                rotationY = (rotationY + pan.x * 0.35f) % 360f
+        modifier = modifier
+            // iki barmaqla böyüt/kiçilt (pinch) və bir barmaqla fırlat
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    scale = (scale * zoom).coerceIn(0.75f, 2.2f)
+                    rotationY = (rotationY + pan.x * 0.35f) % 360f
+                }
             }
-        },
+            // nömrəni dəyişmək üçün: maşına uzun bas; iki barmaqla iki dəfə toxun → 1:1
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        tempPlateInput = plateText
+                        showPlateDialog = true
+                    },
+                    onDoubleTap = {
+                        scale = 1f
+                        rotationY = 0f
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -60,30 +76,6 @@ fun InteractiveQ07ModelStage(
             carVisualContent(rotationY, plateText) {
                 tempPlateInput = plateText
                 showPlateDialog = true
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(12.dp)
-                .background(Color(0xE6FFFFFF), RoundedCornerShape(16.dp))
-                .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            IconButton(onClick = { scale = (scale + 0.2f).coerceAtMost(2.2f) }, modifier = Modifier.size(36.dp)) {
-                Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-            }
-            IconButton(onClick = { scale = (scale - 0.2f).coerceAtLeast(0.75f) }, modifier = Modifier.size(36.dp)) {
-                Text("-", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-            }
-            TextButton(
-                onClick = { scale = 1f; rotationY = 0f },
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.height(28.dp)
-            ) {
-                Text("1:1", fontSize = 11.sp, color = Color(0xFF0284C7))
             }
         }
     }
