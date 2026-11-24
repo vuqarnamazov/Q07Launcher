@@ -160,17 +160,6 @@ private fun AppActionsDialog(app: AppEntry, onDismiss: () -> Unit) {
                         }) { Text("Orijinal ad") }
                     }
                 } else {
-                    // Çoxpəncərə: tətbiqi ayrı pəncərədə aç (bir neçə tətbiq eyni anda)
-                    listOf(
-                        az.q07.launcher.data.WindowLauncher.Area.CENTER,
-                        az.q07.launcher.data.WindowLauncher.Area.LEFT_HALF,
-                        az.q07.launcher.data.WindowLauncher.Area.RIGHT_HALF,
-                        az.q07.launcher.data.WindowLauncher.Area.BESIDE_DOCK
-                    ).forEach { area ->
-                        MenuItem("🗗 ${area.title} aç") {
-                            AppRepository.launch(context, app, area); onDismiss()
-                        }
-                    }
                     MenuItem("Adını dəyiş") { renaming = true }
                     MenuItem(if (hidden) "Siyahıda göstər" else "Siyahıdan gizlət") {
                         LauncherPrefs.setHidden(app.key, !hidden); onDismiss()

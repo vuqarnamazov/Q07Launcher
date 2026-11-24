@@ -124,9 +124,8 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                                     ModulesPanel(Modifier.fillMaxSize())
                                 }
                                 else -> {
-                                    // son səhifə: son açılanlar + çərçivəli çoxlu proqram paneli
-                                    RecentAppsPanel(apps, Modifier.weight(0.4f).fillMaxHeight())
-                                    MultiAppFramePage(Modifier.weight(0.6f).fillMaxHeight())
+                                    // son səhifə: son açılan proqramlar (çoxlu mini pəncərə paneli ləğv edilib)
+                                    RecentAppsPanel(apps, Modifier.fillMaxSize())
                                 }
                             }
                         }

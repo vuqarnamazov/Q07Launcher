@@ -113,5 +113,5 @@ object WindowLauncher {
     }
 
     /** Launcher-dən adi açılış: kompakt rejimdə tətbiq launcher-in sağında pəncərədə açılır */
-    fun defaultArea(): Area = Area.BESIDE_DOCK
+    fun defaultArea(): Area = Area.FULL
 }

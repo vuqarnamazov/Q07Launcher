@@ -195,14 +195,18 @@ internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ControlChips(VehicleControl.ENERGY_MODE, compactTitle = "Enerji rejimi")
-                    ControlChips(VehicleControl.DRIVE_MODE, compactTitle = "Sürüş")
-                    ThemedCenterpiece(carH, onOpenModules)
-                    ControlChips(VehicleControl.SUSPENSION, compactTitle = "Asqı")
-                    ControlChips(VehicleControl.ENERGY_RECOVERY, compactTitle = "Enerji bərpası")
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.weight(1f)) { ControlChips(VehicleControl.POWER_STEERING, compactTitle = "Sükan") }
-                        Box(Modifier.weight(1f)) { ControlChips(VehicleControl.BRAKE_MODE, compactTitle = "Əyləc") }
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.ENERGY_MODE, compactTitle = "Enerji rejimi") }
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.DRIVE_MODE, compactTitle = "Sürüş") }
+                    }
+                    ThemedCenterpiece(carH, onOpenModules)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.SUSPENSION, compactTitle = "Asqı") }
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.ENERGY_RECOVERY, compactTitle = "Enerji bərpası") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.POWER_STEERING, compactTitle = "Sükan") }
+                        ControlCard(Modifier.weight(1f)) { ControlChips(VehicleControl.BRAKE_MODE, compactTitle = "Əyləc") }
                     }
                     if (Look.klassik || Look.modern || Look.elegant) MediaStrip(Modifier.fillMaxWidth())
                     val msg by FactoryBridge.message.collectAsState()
@@ -216,6 +220,17 @@ internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
         }
     }
     if (noteOpen) QuickNoteDialog { noteOpen = false }
+}
+
+/** Hər idarəetmə qrupu üçün eyni görünüşlü kart — səliqəli şəbəkə */
+@Composable
+private fun ControlCard(modifier: Modifier, content: @Composable () -> Unit) {
+    Box(
+        modifier.clip(RoundedCornerShape(18.dp))
+            .background(CarColors.PanelAlt)
+            .border(1.dp, CarColors.Border, RoundedCornerShape(18.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) { content() }
 }
 
 @Composable

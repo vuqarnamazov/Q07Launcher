@@ -47,13 +47,6 @@ object FreeformWindowLauncher {
         lastLaunchedName = appDisplayName
         currentMode = mode
 
-        if (Settings.canDrawOverlays(context)) {
-            context.startService(Intent(context, SmartWindowOverlayService::class.java).apply {
-                putExtra("MODE", mode.name)
-                putExtra("APP_NAME", appDisplayName)
-            })
-        }
-
         if (mode == WindowDisplayMode.FULLSCREEN) {
             targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             return try {
