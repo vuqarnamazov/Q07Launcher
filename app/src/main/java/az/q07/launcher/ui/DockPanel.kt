@@ -193,10 +193,11 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                 val btnH = 56.dp
                 val slotSpacing = if (count >= 6) 6.dp else 8.dp
                 val compactClock = maxWidth < 270.dp
-                val clockH = if (compactClock) 80.dp else 96.dp
-                val gaugesH = if (AppSettings.compactMode) 150.dp else 0.dp
-                val fixed = 40.dp + clockH + btnH * 3 + gaugesH + gap * 5 + 12.dp + slotSpacing * (count - 1)
-                val itemH = ((maxHeight - fixed) / count).coerceIn(40.dp, 68.dp)
+                val clockH = if (compactClock) 150.dp else 190.dp
+                val eqH = 34.dp
+                val statusH = 150.dp
+                val fixed = 40.dp + clockH + eqH + statusH + btnH + gap * 5 + slotSpacing * (count - 1)
+                val itemH = ((maxHeight - fixed) / count).coerceIn(40.dp, 60.dp)
                 val boxHeight = maxHeight
                 Column(
                     modifier = Modifier
@@ -208,6 +209,8 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                         ClockBlock(big = true, compact = compactClock)
+                        MusicEqualizer(np.playing, Modifier.fillMaxWidth().height(eqH))
+                        CarStatusCard()
                         GlowingFlowNavigationColumn(
                             items = slotItems,
                             selectedIndex = selectedSlot,
@@ -224,10 +227,6 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                         verticalArrangement = Arrangement.spacedBy(gap),
                         modifier = Modifier.padding(top = gap)
                     ) {
-                        // Kompakt rejimdə maşın göstəriciləri solda daim görünür
-                        if (AppSettings.compactMode) az.q07.launcher.modules.CarMiniGauges()
-                        // Sabit düymələr: iPhone kimi sürüşdürüb təsdiqlə (təsadüfən basılmasın)
-                        // Bir düymə: sürüşdür → seçim (Zavod menyusu / defolt əsas ekran)
                         SlideToConfirm(
                             label = "Zavod  ·  Defolt",
                             color = CarColors.Warning,
@@ -235,28 +234,6 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
                             height = btnH,
                             onConfirm = { factoryMenu = true }
                         )
-                        DockButton(
-                            label = "Sərnişin ekranı", subtitle = null, bitmap = null,
-                            vector = Icons.Filled.ScreenShare, tint = CarColors.Accent,
-                            modifier = Modifier.fillMaxWidth().height(btnH),
-                            onClick = { passengerOpen = true }
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            DockButton(
-                                label = "Ayarlar", subtitle = null, bitmap = null,
-                                vector = Icons.Filled.Settings, tint = CarColors.TextSecondary,
-                                modifier = Modifier.weight(1f).height(btnH),
-                                onClick = { settingsOpen = true }
-                            )
-                            DockButton(
-                                label = if (AppSettings.compactMode) "Tam" else "Kompakt",
-                                subtitle = null, bitmap = null,
-                                vector = if (AppSettings.compactMode) Icons.Filled.Fullscreen else Icons.Filled.VerticalSplit,
-                                tint = CarColors.Accent,
-                                modifier = Modifier.weight(1f).height(btnH),
-                                onClick = { AppSettings.update { compactMode = !compactMode } }
-                            )
-                        }
                     }
                 }
             }
@@ -400,18 +377,20 @@ private fun ClockBlock(big: Boolean, compact: Boolean = false) {
     val locale = remember { Locale.forLanguageTag("az-AZ") }
     val timeFmt = remember { SimpleDateFormat("HH:mm", locale) }
     val secFmt = remember { SimpleDateFormat("ss", locale) }
-    val dateFmt = remember(big) { SimpleDateFormat(if (big) "EEEE, d MMMM" else "EEE, d MMM", locale) }
+    val dateFmt = remember(big) { SimpleDateFormat(if (big) "d MMMM yyyy" else "d MMM", locale) }
+    val dayFmt = remember { SimpleDateFormat("EEEE", locale) }
     val date = Date(now)
 
     if (big && Look.analogClock) {
         // Klassik / Modern / Elegant: analoq saat + tarix, Elegant-də səs dalğası
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            AnalogClock(if (compact) 96.dp else 128.dp)
-            Text(timeFmt.format(date), fontSize = 22.sp, color = CarColors.TextPrimary)
+            AnalogClock(if (compact) 96.dp else 120.dp)
+            Text(timeFmt.format(date), fontSize = 26.sp, fontWeight = FontWeight.Medium, color = CarColors.TextPrimary)
+            Text(dayFmt.format(date).replaceFirstChar { it.titlecase(locale) }, fontSize = 16.sp,
+                color = CarColors.Accent, maxLines = 1)
             val temp = if (weather.ok) "  ·  " + Math.round(weather.temp) + "°C" else ""
-            Text(dateFmt.format(date).replaceFirstChar { it.titlecase(locale) } + temp, fontSize = 14.sp,
+            Text(dateFmt.format(date) + temp, fontSize = 15.sp,
                 color = CarColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (Look.elegant) WaveBars(Modifier.fillMaxWidth().height(34.dp).padding(top = 6.dp))
         }
         return
     }
@@ -432,11 +411,13 @@ private fun ClockBlock(big: Boolean, compact: Boolean = false) {
                 )
             }
         }
+        if (big) Text(dayFmt.format(date).replaceFirstChar { it.titlecase(locale) }, fontSize = 18.sp,
+            color = CarColors.Accent, maxLines = 1)
         val temp = if (weather.ok) {
             "  ·  " + WeatherRepo.describe(weather.code).first + " " + Math.round(weather.temp) + "°C"
         } else ""
         Text(
-            text = dateFmt.format(date).replaceFirstChar { it.titlecase(locale) } + temp,
+            text = dateFmt.format(date) + temp,
             fontSize = if (big) 17.sp else 14.sp,
             color = CarColors.TextSecondary,
             maxLines = 1,
@@ -497,5 +478,94 @@ private fun DockButton(
                 Text(subtitle, fontSize = 13.sp, color = CarColors.TextSecondary, maxLines = 1)
             }
         }
+    }
+}
+
+
+/** Musiqi ekvalayzeri — panelin solundan sağına; mahnı çalanda hərəkət edir, dayananda sakit dayanır */
+@Composable
+private fun MusicEqualizer(playing: Boolean, modifier: Modifier) {
+    val bars = 24
+    val levels = remember { mutableStateListOf<Float>().apply { repeat(bars) { add(0.12f) } } }
+    LaunchedEffect(playing) {
+        val rnd = java.util.Random()
+        while (true) {
+            for (i in 0 until bars) {
+                val target = if (playing) 0.2f + rnd.nextFloat() * 0.8f else 0.12f
+                levels[i] = levels[i] + (target - levels[i]) * 0.55f
+            }
+            if (!playing && levels.all { it < 0.14f }) break
+            delay(110)
+        }
+    }
+    val accent = CarColors.Accent
+    val warm = CarColors.Warning
+    androidx.compose.foundation.Canvas(modifier) {
+        val gap = 4.dp.toPx()
+        val w = (size.width - gap * (bars - 1)) / bars
+        for (i in 0 until bars) {
+            val h = (size.height * levels[i]).coerceAtLeast(3.dp.toPx())
+            val x = i * (w + gap)
+            val t = i / (bars - 1f)
+            val c = androidx.compose.ui.graphics.lerp(accent, warm, t)
+            drawRoundRect(
+                color = c.copy(alpha = if (playing) 0.95f else 0.45f),
+                topLeft = androidx.compose.ui.geometry.Offset(x, (size.height - h) / 2f),
+                size = androidx.compose.ui.geometry.Size(w, h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2f, w / 2f)
+            )
+        }
+    }
+}
+
+/** Maşının vəziyyəti: enerji rejimi, asqı rejimi, təkər təzyiqi */
+@Composable
+private fun CarStatusCard() {
+    val current by az.q07.launcher.data.FactoryBridge.current.collectAsState()
+    val labels by az.q07.launcher.data.FactoryBridge.labels.collectAsState()
+    val tyres by az.q07.launcher.data.FactoryBridge.tyres.collectAsState()
+    fun mode(c: az.q07.launcher.data.VehicleControl): String {
+        val i = current[c] ?: return "—"
+        val names = labels[c]?.takeIf { it.isNotEmpty() } ?: c.options
+        return names.getOrNull(i) ?: "—"
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CarColors.PanelAlt)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatusLine("Enerji rejimi", mode(az.q07.launcher.data.VehicleControl.ENERGY_MODE), CarColors.Green)
+        StatusLine("Asqı", mode(az.q07.launcher.data.VehicleControl.SUSPENSION), CarColors.Accent)
+        Text("Təkər təzyiqi" + (tyres?.unit?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""),
+            fontSize = 13.sp, color = CarColors.TextSecondary)
+        val t = tyres
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TyreCell("Ön sol", t?.fl, Modifier.weight(1f))
+            TyreCell("Ön sağ", t?.fr, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TyreCell("Arxa sol", t?.rl, Modifier.weight(1f))
+            TyreCell("Arxa sağ", t?.rr, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun StatusLine(title: String, value: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 14.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
+    }
+}
+
+@Composable
+private fun TyreCell(title: String, value: String?, modifier: Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontSize = 11.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(value?.takeIf { it.isNotBlank() } ?: "—", fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            color = CarColors.TextPrimary, maxLines = 1)
     }
 }

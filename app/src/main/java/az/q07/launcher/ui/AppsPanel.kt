@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.ScreenShare
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -57,6 +59,29 @@ fun AppsPanel(apps: List<AppEntry>?, columns: Int, modifier: Modifier = Modifier
     var query by remember { mutableStateOf("") }
     var showHidden by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<AppEntry?>(null) }
+    var settingsOpen by remember { mutableStateOf(false) }
+    var passengerOpen by remember { mutableStateOf(false) }
+    var passengerMsg by remember { mutableStateOf<String?>(null) }
+
+    if (settingsOpen) SettingsScreen(onClose = { settingsOpen = false })
+    if (passengerOpen) {
+        AppPickerDialog(
+            title = if (az.q07.launcher.data.PassengerScreen.available(context)) "Sərnişin ekranına göndər" else "Sərnişin ekranı tapılmadı",
+            apps = apps.orEmpty().filterNot { LauncherPrefs.isHidden(it.key) },
+            onPick = { passengerOpen = false; passengerMsg = az.q07.launcher.data.PassengerScreen.launch(context, it.component) ?: "${it.label} sərnişin ekranında açıldı" },
+            onClear = { passengerOpen = false; passengerMsg = az.q07.launcher.data.PassengerScreen.goHome(context) ?: "Sərnişin ekranı əsas ekrana qaytarıldı" },
+            onDismiss = { passengerOpen = false },
+            clearLabel = "Sərnişin ekranını təmizlə"
+        )
+    }
+    passengerMsg?.let { m ->
+        androidx.compose.runtime.LaunchedEffect(m) { kotlinx.coroutines.delay(3000); passengerMsg = null }
+        ScaledAlertDialog(
+            onDismissRequest = { passengerMsg = null },
+            text = { Text(m, fontSize = 18.sp) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { passengerMsg = null }) { Text("OK") } }
+        )
+    }
 
     PanelSurface(modifier) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
@@ -73,6 +98,13 @@ fun AppsPanel(apps: List<AppEntry>?, columns: Int, modifier: Modifier = Modifier
                     "${apps?.count { !LauncherPrefs.isHidden(it.key) } ?: 0}",
                     fontSize = 16.sp, color = CarColors.TextSecondary
                 )
+                // Sərnişin ekranı və Ayarlar sol paneldən bura köçürülüb
+                IconButton(onClick = { passengerOpen = true }) {
+                    Icon(Icons.Filled.ScreenShare, "Sərnişin ekranı", tint = CarColors.Accent)
+                }
+                IconButton(onClick = { settingsOpen = true }) {
+                    Icon(Icons.Filled.Settings, "Ayarlar", tint = CarColors.TextSecondary)
+                }
                 IconButton(onClick = { showHidden = !showHidden }) {
                     Icon(
                         if (showHidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,

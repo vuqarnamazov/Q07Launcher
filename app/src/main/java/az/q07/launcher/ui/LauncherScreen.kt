@@ -63,29 +63,8 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
         CompositionLocalProvider(
             LocalDensity provides Density(base.density * scale, base.fontScale)
         ) {
-            if (landscape && AppSettings.compactMode) {
-                // Kompakt rejim: launcher solda dar panel, tətbiqlər sağda pəncərədə açılır
-                Row(Modifier.fillMaxSize()) {
-                    DockPanel(
-                        apps.orEmpty(), vertical = true, resumeTick = resumeTick,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(az.q07.launcher.data.WindowLauncher.DOCK_FRACTION)
-                            .padding(12.dp)
-                    )
-                    Box(
-                        Modifier.fillMaxSize().padding(24.dp),
-                        contentAlignment = androidx.compose.ui.Alignment.Center
-                    ) {
-                        androidx.compose.material3.Text(
-                            "Kompakt rejim — tətbiqlər burada pəncərədə açılır.\nDock-dan tətbiq seç. Tam görünüş üçün «Tam» düyməsi.",
-                            color = CarColors.TextSecondary,
-                            fontSize = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-            } else if (landscape) {
+            // kompakt rejim ləğv edilib
+            if (landscape) {
                 // Sol panel (saat + proqramlar) SABİT qalır; sağ hissə telefon kimi səhifələrlə sürüşür
                 val pageCount = 3
                 val pager = rememberPagerState(pageCount = { pageCount })
