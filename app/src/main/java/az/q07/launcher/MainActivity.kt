@@ -85,13 +85,10 @@ class MainActivity : ComponentActivity() {
                 var ota by androidx.compose.runtime.remember {
                     androidx.compose.runtime.mutableStateOf<az.q07.launcher.data.OtaUpdateInfo?>(null)
                 }
-                // Aktivdirsə: GitHub-da "blocked" siyahısına düşübsə yenidən kilidlə; sonra OTA yeniləməni yoxla
+                // Aktiv launcher bir daha yoxlanılmır/bloklanmır (kod yalnız ilk aktivləşdirmədə lazımdır).
+                // Yalnız OTA yeniləmə yoxlanılır.
                 androidx.compose.runtime.LaunchedEffect(activated) {
-                    if (activated) {
-                        lic.syncLicenseFromGitHub(applicationContext)
-                        if (!lic.isLocallyActivated(applicationContext)) { activated = false; return@LaunchedEffect }
-                        ota = lic.checkForOtaUpdate(az.q07.launcher.BuildConfig.VERSION_CODE)
-                    }
+                    if (activated) ota = lic.checkForOtaUpdate(az.q07.launcher.BuildConfig.VERSION_CODE)
                 }
                 if (activated) {
                     LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
