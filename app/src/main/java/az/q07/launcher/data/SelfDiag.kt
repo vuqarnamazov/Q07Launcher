@@ -150,3 +150,5 @@ object SelfDiag {
     fun learnedTitle(control: VehicleControl): String? =
         if (::prefs.isInitialized) prefs.getString("title_${control.name}", null) else null
 }
+
+// CI imza testi: 20261124T150522Z
