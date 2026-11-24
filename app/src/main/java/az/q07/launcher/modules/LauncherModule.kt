@@ -40,6 +40,9 @@ object ModuleRegistry {
         NetworkModule,
         SystemInfoModule,
         VehicleScannerModule,
+        ServiceModule,
+        TransferModule,
+        EngineModule,
         // MyModule,  ← yeni modulları bura əlavə et
     )
 

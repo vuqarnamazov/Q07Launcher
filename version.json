@@ -1,6 +1,6 @@
 {
-  "versionCode": 55,
-  "versionName": "1.54",
-  "changelog": "Asimmetrik lisenziya (ECDSA): gizli açar yalnız sahibdə.",
-  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.54/app-release.apk"
+  "versionCode": 56,
+  "versionName": "1.55",
+  "changelog": "6 yeni funksiya: nömrə+3D zoom, mini pəncərə, servis (SMS/WhatsApp), telefon-maşın transfer (PIN), çərçivəli çoxlu proqram, mühərrik idarəsi (yalnız park).",
+  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.55/app-release.apk"
 }

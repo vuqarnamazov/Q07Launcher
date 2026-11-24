@@ -1,0 +1,7 @@
+[
+  { "id": "oil", "title": "Yağdəyişmə və Filtrlər", "subtitle": "Mühərrik və transmissiya yağının dəyişdirilməsi", "phoneNumber": "+994500000000" },
+  { "id": "tech", "title": "Texniki Baxış", "subtitle": "İllik dövlət texniki baxışı və hazırlıq", "phoneNumber": "+994500000000" },
+  { "id": "diag", "title": "Kompüter Diaqnostikası", "subtitle": "Hibrid sistem, batareya və elektronika yoxlanışı", "phoneNumber": "+994500000000" },
+  { "id": "brake", "title": "Əyləc və Asqı Sistemi", "subtitle": "Nakladka, disk və xodovoy təmiri", "phoneNumber": "+994500000000" },
+  { "id": "ins", "title": "Sığorta və Sənədləşmə", "subtitle": "İcbari və KASKO sığorta yenilənməsi", "phoneNumber": "+994500000000" }
+]

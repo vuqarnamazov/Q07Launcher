@@ -394,7 +394,12 @@ private fun RotatingCar(modifier: Modifier) {
             )
         }
         val a = angle.value
-        if (use3d) Car3DView(Modifier.fillMaxSize())
+        if (use3d) InteractiveQ07ModelStage(Modifier.fillMaxSize()) { _, plate, onEditPlate ->
+            Car3DView(Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().padding(bottom = 6.dp), contentAlignment = Alignment.BottomCenter) {
+                BumperLicensePlateBadge(plateText = plate, onClick = onEditPlate)
+            }
+        }
         else Box(
             Modifier.fillMaxSize().graphicsLayer {
                 rotationY = a

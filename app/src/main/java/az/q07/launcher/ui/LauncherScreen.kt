@@ -123,7 +123,11 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                                     // tətbiqlər yalnız 1-ci səhifədə; burada modullar bütün eni tutur
                                     ModulesPanel(Modifier.fillMaxSize())
                                 }
-                                else -> RecentAppsPanel(apps, Modifier.fillMaxSize())
+                                else -> {
+                                    // son səhifə: son açılanlar + çərçivəli çoxlu proqram paneli
+                                    RecentAppsPanel(apps, Modifier.weight(0.4f).fillMaxHeight())
+                                    MultiAppFramePage(Modifier.weight(0.6f).fillMaxHeight())
+                                }
                             }
                         }
                     }

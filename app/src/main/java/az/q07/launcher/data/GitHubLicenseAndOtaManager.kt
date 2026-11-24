@@ -33,6 +33,10 @@ object GitHubLicenseAndOtaManager {
     // Gizli açar yalnız sahibdədir (Q07_Admin_Keygen.html). APK tam sökülsə belə aktivasiya kodu yaradıla bilməz.
     private const val PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtTewp5XYqT5AaaUTPiYtyMilGYW94LoODEFLZadHHAgkaZ5h4BSxmZXgt7XMQmiMPDWuO16rrMqL9oI8Whw5Ww=="
 
+    // Sahibin bərpa parolu — PBKDF2-SHA256 hash kimi ("saltB64:hashB64"). Parol özü HEÇ YERDƏ saxlanmır.
+    // Boşdursa bərpa parolu söndürülüb.
+    private const val RECOVERY_HASH = ""
+
     // GitHub repo raw ünvanları (açıq repo — maşın parolsuz oxuya bilsin; "launcher" reposu gizlidir):
     private const val GITHUB_LICENSES_URL = "https://raw.githubusercontent.com/vuqarnamazov/Q07Launcher/main/licenses.json"
     private const val GITHUB_VERSION_URL = "https://raw.githubusercontent.com/vuqarnamazov/Q07Launcher/main/version.json"
@@ -97,6 +101,22 @@ object GitHubLicenseAndOtaManager {
         return byteArrayOf(0x30, content.size.toByte()) + content
     }
 
+    // Sahibin bərpa parolunu yoxlayır (açar faylı əlində olmayanda maşını açmaq üçün)
+    private fun verifyRecoveryPassword(password: String): Boolean {
+        if (RECOVERY_HASH.isBlank() || password.isEmpty()) return false
+        return try {
+            val parts = RECOVERY_HASH.split(":")
+            if (parts.size != 2) return false
+            val salt = android.util.Base64.decode(parts[0], android.util.Base64.DEFAULT)
+            val expected = android.util.Base64.decode(parts[1], android.util.Base64.DEFAULT)
+            val spec = javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 120000, 256)
+            val got = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            java.security.MessageDigest.isEqual(got, expected)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     // Bizim imza sertifikatının SHA-256 izi — yalnız bu açarla imzalanmış APK keçərlidir.
     // Kimsə launcheri sökub (kilidi çıxarıb) öz açarı ilə yenidən imzalasa, iz uyğun gəlməyəcək.
     private const val OWNER_CERT_SHA256 = "7315A442DD20F32AC1D8272BB5EF02EF091F31D531C6B11190D3279608B1CCEF"
@@ -153,13 +173,20 @@ object GitHubLicenseAndOtaManager {
         if (!hasOwnerSignature(context)) return false
         val reqCode = getVehicleRequestCode(context)
         val clean = inputCode.trim()
-        return if (verifyOfflineSignature(reqCode, clean)) {
+        // Əvvəlcə imza kodu, sonra bərpa parolu yoxlanılır
+        if (verifyOfflineSignature(reqCode, clean)) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(KEY_OFFLINE_TOKEN, clean).apply()
-            true
-        } else {
-            false
+            return true
         }
+        if (verifyRecoveryPassword(clean)) {
+            // Bərpa parolu ilə açılış da bu maşının VIN-inə bağlanır
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_REMOTE_APPROVED, reqCode).apply()
+            SelfDiag.log("license", "bərpa parolu ilə açıldı")
+            return true
+        }
+        return false
     }
 
     // 5. GitHub-dakı licenses.json faylını yoxlayır (Siz telefonla siyahıya əlavə etmisinizsə açılır)

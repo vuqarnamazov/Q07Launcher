@@ -39,6 +39,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applyExtras(intent)
         super.onCreate(savedInstanceState)
+        // telefon–maşın fayl kanalı: launcher açılanda işə düşür (PIN yaranır)
+        runCatching { az.q07.launcher.data.PhoneCarTransferServer.start(applicationContext) }
 
         AppSettings.init(applicationContext)
         NotesStore.init(applicationContext)
