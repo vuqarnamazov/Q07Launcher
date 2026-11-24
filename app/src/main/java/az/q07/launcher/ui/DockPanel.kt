@@ -131,7 +131,7 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
 
     // Neon menyu: seçilmiş slot (toxunan kimi aktiv olur və seçili qalır)
     var selectedSlot by rememberSaveable { mutableIntStateOf(0) }
-    val count = AppSettings.dockSlotCount.coerceIn(3, LauncherPrefs.DOCK_SLOTS)
+    val count = if (vertical) AppSettings.dockSlotCount.coerceIn(3, 4) else AppSettings.dockSlotCount.coerceIn(3, LauncherPrefs.DOCK_SLOTS)
     val slotApps = List(count) { i -> byKey[LauncherPrefs.dockSlots.getOrElse(i) { "" }] }
 
     // Launcher-ə qayıdanda son açılan tətbiqin slotunu işıqlandır
@@ -189,22 +189,22 @@ fun DockPanel(apps: List<AppEntry>, vertical: Boolean, resumeTick: Int, modifier
             // Ölçü böyüdüləndə (120%+) heç nə itməsin: slot hündürlüyü mövcud yerə görə hesablanır,
             // sığmasa panel sürüşdürülür
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val gap = 12.dp
+                val gap = 10.dp
                 val btnH = 56.dp
                 val slotSpacing = if (count >= 6) 6.dp else 8.dp
                 val compactClock = maxWidth < 270.dp
-                val clockH = if (compactClock) 150.dp else 190.dp
-                val eqH = 34.dp
-                val statusH = 150.dp
+                val clockH = if (compactClock) 150.dp else 175.dp
+                val eqH = 26.dp
+                val statusH = 128.dp
                 val fixed = 40.dp + clockH + eqH + statusH + btnH + gap * 5 + slotSpacing * (count - 1)
-                val itemH = ((maxHeight - fixed) / count).coerceIn(40.dp, 60.dp)
+                val itemH = ((maxHeight - fixed) / count).coerceIn(38.dp, 56.dp)
                 val boxHeight = maxHeight
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .heightIn(min = boxHeight)
-                        .padding(20.dp),
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -384,7 +384,7 @@ private fun ClockBlock(big: Boolean, compact: Boolean = false) {
     if (big && Look.analogClock) {
         // Klassik / Modern / Elegant: analoq saat + tarix, Elegant-də səs dalğası
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            AnalogClock(if (compact) 96.dp else 120.dp)
+            AnalogClock(if (compact) 90.dp else 104.dp)
             Text(timeFmt.format(date), fontSize = 26.sp, fontWeight = FontWeight.Medium, color = CarColors.TextPrimary)
             Text(dayFmt.format(date).replaceFirstChar { it.titlecase(locale) }, fontSize = 16.sp,
                 color = CarColors.Accent, maxLines = 1)
@@ -531,11 +531,13 @@ private fun CarStatusCard() {
     }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CarColors.PanelAlt)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        StatusLine("Enerji rejimi", mode(az.q07.launcher.data.VehicleControl.ENERGY_MODE), CarColors.Green)
-        StatusLine("Asqı", mode(az.q07.launcher.data.VehicleControl.SUSPENSION), CarColors.Accent)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.weight(1f)) { StatusLine("Enerji", mode(az.q07.launcher.data.VehicleControl.ENERGY_MODE), CarColors.Green) }
+            Box(Modifier.weight(1f)) { StatusLine("Asqı", mode(az.q07.launcher.data.VehicleControl.SUSPENSION), CarColors.Accent) }
+        }
         Text("Təkər təzyiqi" + (tyres?.unit?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""),
             fontSize = 13.sp, color = CarColors.TextSecondary)
         val t = tyres
@@ -553,15 +555,15 @@ private fun CarStatusCard() {
 @Composable
 private fun StatusLine(title: String, value: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontSize = 14.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f), maxLines = 1)
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
+        Text(title, fontSize = 13.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(value, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
     }
 }
 
 @Composable
 private fun TyreCell(title: String, value: String?, modifier: Modifier) {
     Row(
-        modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 8.dp, vertical = 5.dp),
+        modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, fontSize = 11.sp, color = CarColors.TextSecondary, modifier = Modifier.weight(1f), maxLines = 1)
