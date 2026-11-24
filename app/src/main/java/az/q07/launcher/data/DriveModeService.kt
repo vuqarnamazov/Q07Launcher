@@ -192,6 +192,8 @@ class DriveModeService : AccessibilityService() {
         // Daxili göstəricilər: status zolağı və zavod ekranlarındakı km/h, %, km, °C mətnləri
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             if (VehicleTelemetryReader.due()) runCatching { VehicleTelemetryReader.onAccessibility(windows) }
+            // OBD Skan Yaddaşı: ekrandakı rəqəmlər (öyrənmə və OBD-siz oxu üçün)
+            if (ObdDiscoveryBridge.due()) runCatching { ObdDiscoveryBridge.onAccessibility(windows, packageName) }
         }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val p = event.packageName?.toString()

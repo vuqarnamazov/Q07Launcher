@@ -476,6 +476,9 @@ private fun CarSection() {
     Chips(names, intervals.indexOf(AppSettings.obdIntervalMs)) { i ->
         AppSettings.update { obdIntervalMs = intervals[i] }
     }
+
+    Label("OBD Skan Yaddaşı (OBD-siz Rejim)", "OBD qoşulu ikən öyrənilən ekran/xassə yolları — adapter olmadan da oxunur")
+    ObdLearnedMemoryCard()
 }
 
 @Composable

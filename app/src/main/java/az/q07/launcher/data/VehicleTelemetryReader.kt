@@ -26,8 +26,10 @@ data class TelemetryState(
     /** Əlavə: ani doldurma/sərf gücü, kW (EV_BATTERY_INSTANTANEOUS_CHARGE_RATE) */
     val chargeRateKw: Float? = null,
     val lastUpdatedMillis: Long = 0L,
-    /** CarProperty / Accessibility / Cache (bir neçəsi ola bilər: "CarProperty + Accessibility") */
-    val sourceLabel: String = "Cache"
+    /** CarProperty / Accessibility / Cache / OBD-Learned (bir neçəsi ola bilər: "CarProperty + Accessibility") */
+    val sourceLabel: String = "Cache",
+    /** OBD qoşulu deyilkən OBD skanından öyrənilmiş yollarla oxunan göstəricilər (açar → dəyər + mənbə) */
+    val obdLearned: Map<String, LearnedReading> = emptyMap()
 ) {
     val isEmpty get() = speedKmh == null && batteryPercent == null && rangeKm == null &&
         innerTempC == null && outerTempC == null && gear == null && chargeRateKw == null
@@ -77,8 +79,13 @@ object VehicleTelemetryReader {
             prefs = openPrefs(app)
             loadCache()
             CarApi.init(app)
+            // OBD Skan Yaddaşı: OBD qoşulu ikən yolları öyrən, OBD yoxdursa öyrənilmiş yollarla oxu
+            runCatching { ObdDiscoverySession.init(app) }
+            runCatching { ObdFreeFallbackResolver.init(app) }
             while (isActive) {
                 runCatching { pollCarProperty() }
+                runCatching { ObdDiscoverySession.tick() }
+                runCatching { ObdFreeFallbackResolver.poll() }
                 publish()
                 if (dirty) { dirty = false; runCatching { saveCache() } }
                 delay(if (AppVisibility.visible) 1000L else 5000L)
@@ -199,16 +206,25 @@ object VehicleTelemetryReader {
         }
         // Sürət və ötürmə tez dəyişir — köhnə (keş) dəyəri göstərmək yanlış olar, yalnız təzəsi
         fun fresh(k: String) = fields[k]?.let { it.src != Src.CACHE && now - it.at < FRESH_MS } == true
+        // OBD-siz rejim: öz mənbələrdə olmayan sahələri OBD skanından öyrənilmiş yollarla tamamla
+        val learned = ObdFreeFallbackResolver.readings.value
+        fun liveLearned(k: String) = learned[k]?.takeIf { it.source != LearnedSource.CACHE }
+        val lSpeed = if (fresh("speed")) null else liveLearned("speed")
+        val lBattery = if (fields["battery"] != null) null else (learned["soc"] ?: learned["soc_hpcm"])
+        val lOuter = if (fields["outer"] != null) null else learned["ambient"]
+        val usedLearned = listOfNotNull(lSpeed, lBattery, lOuter)
         val s = TelemetryState(
-            speedKmh = if (fresh("speed")) get("speed") else null,
-            batteryPercent = get("battery"),
+            speedKmh = if (fresh("speed")) get("speed") else lSpeed?.value?.toFloat(),
+            batteryPercent = get<Int>("battery") ?: lBattery?.value?.toInt()?.coerceIn(0, 100),
             rangeKm = get("range"),
             innerTempC = get("inner"),
-            outerTempC = get("outer"),
+            outerTempC = get<Float>("outer") ?: lOuter?.value?.toFloat(),
             gear = if (fresh("gear")) get("gear") else null,
             chargeRateKw = get("rate"),
-            lastUpdatedMillis = fields.values.maxOfOrNull { it.at } ?: 0L,
-            sourceLabel = label
+            lastUpdatedMillis = maxOf(fields.values.maxOfOrNull { it.at } ?: 0L, usedLearned.maxOfOrNull { it.at } ?: 0L),
+            sourceLabel = if (usedLearned.isEmpty()) label
+                else (if (live.isEmpty()) "" else "$label + ") + usedLearned.map { it.source.label }.distinct().joinToString(" + "),
+            obdLearned = learned
         )
         if (s != _state.value) _state.value = s
     }

@@ -320,6 +320,8 @@ object CarModule : LauncherModule {
         val obd by ObdMonitor.state.collectAsState()
         val shown = (mainKeys + secondKeys).toSet()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // OBD Skan Yaddaşı: OBD qoşulu ikən öyrənilən yollar, OBD-siz rejimdə onlardan oxu
+            az.q07.launcher.ui.ObdLearnedMemoryCard()
             // Maşının bütün dəstəklənən göstəriciləri — qruplar üzrə
             ObdPids.groups.forEach { g ->
                 val pids = ObdPids.all.filter { it.group == g && it.key !in shown && it.key !in obd.unsupported }
