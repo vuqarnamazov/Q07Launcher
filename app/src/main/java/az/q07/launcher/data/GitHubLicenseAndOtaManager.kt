@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
 import android.provider.Settings
@@ -78,18 +79,60 @@ object GitHubLicenseAndOtaManager {
         return "${hex.substring(0, 4)}-${hex.substring(4, 8)}-${hex.substring(8, 12)}"
     }
 
+    // Bizim imza sertifikatının SHA-256 izi — yalnız bu açarla imzalanmış APK keçərlidir.
+    // Kimsə launcheri sökub (kilidi çıxarıb) öz açarı ilə yenidən imzalasa, iz uyğun gəlməyəcək.
+    private const val OWNER_CERT_SHA256 = "731 5A442DD20F32AC1D8272BB5EF02EF091F31D531C6B11190D3279608B1CCEF".replace(" ", "")
+
+    @Volatile private var sigChecked = false
+    @Volatile private var sigValid = true
+
+    // Təhlükəsiz tərəf: imzanı OXUYUB BAŞQA açar olduğunu dəqiq görəndə bloklayır.
+    // Oxuya bilməsə və ya uyğun gəlsə, sahibi öz maşınında bloklamır (fail-open).
+    @Suppress("DEPRECATION", "PackageManagerGetSignatures")
+    private fun hasOwnerSignature(context: Context): Boolean {
+        if (sigChecked) return sigValid
+        sigChecked = true
+        sigValid = try {
+            val pm = context.packageManager
+            val md = MessageDigest.getInstance("SHA-256")
+            val sigs = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                val info = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                val s = info.signingInfo
+                when {
+                    s == null -> null
+                    s.hasMultipleSigners() -> s.apkContentsSigners
+                    else -> s.signingCertificateHistory
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES).signatures
+            }
+            if (sigs.isNullOrEmpty()) true // oxunmadı → bloklama
+            else sigs.any {
+                md.digest(it.toByteArray()).joinToString("") { b -> "%02X".format(b) }.equals(OWNER_CERT_SHA256, ignoreCase = true)
+            }
+        } catch (_: Exception) {
+            true // yoxlama mümkün olmadı → sahibi bloklamayaq
+        }
+        SelfDiag.log("license", if (sigValid) "imza yoxlanıldı: OK" else "imza UYĞUN DEYİL — sındırılmış nüsxə")
+        return sigValid
+    }
+
     // 3. Yerli yaddaşda aktiv olub-olmadığını yoxlayır
     fun isLocallyActivated(context: Context): Boolean {
+        if (!hasOwnerSignature(context)) return false // yenidən imzalanmış (sındırılmış) nüsxə — açılmır
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_REMOTE_APPROVED, false)) return true
-
-        val savedToken = prefs.getString(KEY_OFFLINE_TOKEN, null) ?: return false
         val reqCode = getVehicleRequestCode(context)
+        // Onlayn təsdiq bu maşının kodu ilə yadda saxlanır: prefs başqa maşına köçürülsə, kod uyğun gəlməyəcək
+        if (prefs.getString(KEY_REMOTE_APPROVED, null) == reqCode) return true
+        // Oflayn token da yalnız bu maşının VIN-i üçün keçərlidir
+        val savedToken = prefs.getString(KEY_OFFLINE_TOKEN, null) ?: return false
         return savedToken == computeExpectedOfflineCode(reqCode)
     }
 
     // 4. Əllə daxil edilən kodu yoxlayır
     fun verifyManualCode(context: Context, inputCode: String): Boolean {
+        if (!hasOwnerSignature(context)) return false
         val reqCode = getVehicleRequestCode(context)
         val expected = computeExpectedOfflineCode(reqCode)
         val clean = inputCode.trim().uppercase()
@@ -133,7 +176,7 @@ object GitHubLicenseAndOtaManager {
                     for (i in 0 until approvedArr.length()) {
                         if (approvedArr.getString(i).equals(reqCode, ignoreCase = true)) {
                             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                                .edit().putBoolean(KEY_REMOTE_APPROVED, true).apply()
+                                .edit().putString(KEY_REMOTE_APPROVED, reqCode).apply()
                             return@withContext true
                         }
                     }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 53,
-  "versionName": "1.52",
-  "changelog": "Onlayn (GitHub) və oflayn VIN lisenziyası, uzaqdan yeniləmə (OTA).",
-  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.52/app-release.apk"
+  "versionCode": 54,
+  "versionName": "1.53",
+  "changelog": "Kopyalanmaya qarşı qoruma: aktivasiya VIN-ə bağlanır, imza yoxlanışı.",
+  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.53/app-release.apk"
 }
