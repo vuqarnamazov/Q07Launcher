@@ -81,7 +81,7 @@ object GitHubLicenseAndOtaManager {
 
     // Bizim imza sertifikatının SHA-256 izi — yalnız bu açarla imzalanmış APK keçərlidir.
     // Kimsə launcheri sökub (kilidi çıxarıb) öz açarı ilə yenidən imzalasa, iz uyğun gəlməyəcək.
-    private const val OWNER_CERT_SHA256 = "731 5A442DD20F32AC1D8272BB5EF02EF091F31D531C6B11190D3279608B1CCEF".replace(" ", "")
+    private const val OWNER_CERT_SHA256 = "7315A442DD20F32AC1D8272BB5EF02EF091F31D531C6B11190D3279608B1CCEF"
 
     @Volatile private var sigChecked = false
     @Volatile private var sigValid = true
