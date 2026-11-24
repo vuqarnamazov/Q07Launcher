@@ -15,8 +15,6 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Hava, yeniləmə yoxlaması, OBD Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- OTA yeniləmə: endirilən APK-nı quraşdırıcıya vermək -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Tam Skaner: Fon İzləməsi ön plan xidməti (bildirişlə) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- İkili şəbəkə: telefon hotspot (internet) + OBD Wi-Fi (lokal) -->
@@ -137,14 +135,5 @@
         <receiver
             android:name=".data.ReminderReceiver"
             android:exported="false" />
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 </manifest>

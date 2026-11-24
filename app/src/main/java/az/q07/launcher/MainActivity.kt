@@ -76,18 +76,8 @@ class MainActivity : ComponentActivity() {
                 var activated by androidx.compose.runtime.remember {
                     androidx.compose.runtime.mutableStateOf(az.q07.launcher.data.LicenseManager.isActivated(applicationContext))
                 }
-                // Aktivdirsə də GitHub-u yoxla: "blocked" siyahısına düşübsə yenidən kilidlə
-                androidx.compose.runtime.LaunchedEffect(activated) {
-                    if (activated) {
-                        val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            az.q07.launcher.data.LicenseManager.syncFromGitHub(applicationContext)
-                        }
-                        if (r == az.q07.launcher.data.LicenseManager.Remote.BLOCKED) activated = false
-                    }
-                }
                 if (activated) {
                     LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
-                    az.q07.launcher.ui.OtaUpdateHost()
                 } else {
                     az.q07.launcher.ui.ActivationLockScreen(onUnlocked = { activated = true })
                 }

@@ -21,15 +21,8 @@ object LicenseManager {
         BuildConfig.LIC_K.mapIndexed { i, v -> ((v xor (0x5A + i * 7)) and 0xFF).toChar() }.joinToString("")
     }
 
-    /** Kilid həmişə aktivdir: onlayn təsdiq (licenses.json) açarsız da işləyir */
-    val enforced: Boolean get() = true
-
-    /** Oflayn kod (keygen) yalnız GitHub secret Q07_LIC_SECRET yığılmaya daxil edilibsə işləyir */
-    val offlineAvailable: Boolean get() = secret.isNotEmpty()
-
-    // GitHub-dakı açıq siyahılar (repo kökündə). Telefonla redaktə: github.com/vuqarnamazov/Q07Launcher/edit/main/licenses.json
-    private const val LICENSES_URL = "https://raw.githubusercontent.com/vuqarnamazov/Q07Launcher/main/licenses.json"
-    private const val KEY_REMOTE_APPROVED = "remote_approved"
+    /** Açar yığılmaya daxil edilibmi (GitHub secret əlavə olunubmu) */
+    val enforced: Boolean get() = secret.isNotEmpty()
 
     @Volatile private var cachedFp: String? = null
     @Volatile private var cachedOk: Boolean? = null
@@ -71,7 +64,7 @@ object LicenseManager {
 
     /** 3. Daxil edilən kodu yoxla və saxla */
     fun verifyAndSave(context: Context, inputCode: String): Boolean {
-        if (!offlineAvailable) return false
+        if (!enforced) return true
         val expected = generateExpectedActivationCode(getVehicleFingerprint(context))
         val clean = normalize(inputCode)
         return if (clean == expected) {
@@ -87,53 +80,12 @@ object LicenseManager {
 
     /** 4. Lisenziya aktivdirmi (nəticə yaddaşda saxlanır — tez-tez çağırılır) */
     fun isActivated(context: Context): Boolean {
+        if (!enforced) return true
         cachedOk?.let { return it }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val remote = prefs.getString(KEY_REMOTE_APPROVED, null) == getVehicleFingerprint(context)
-        val saved = prefs.getString(KEY_SAVED_CODE, null)
-        val offline = offlineAvailable && saved != null && saved == generateExpectedActivationCode(getVehicleFingerprint(context))
-        val ok = remote || offline
+        val saved = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_SAVED_CODE, null)
+        val ok = saved != null && saved == generateExpectedActivationCode(getVehicleFingerprint(context))
         cachedOk = ok
         return ok
-    }
-
-    enum class Remote { APPROVED, BLOCKED, NOT_LISTED, NO_NETWORK }
-
-    /**
-     * GitHub licenses.json: {"approved":[...], "blocked":[...]}
-     * approved → onlayn aktivləşir (internet olmadan da yadda qalır); blocked → bütün aktivasiya silinir.
-     * Şəbəkə yoxdursa heç nə dəyişmir.
-     */
-    fun syncFromGitHub(context: Context): Remote {
-        val code = getVehicleFingerprint(context)
-        val body = try {
-            val c = (java.net.URL("$LICENSES_URL?t=${System.currentTimeMillis()}").openConnection() as java.net.HttpURLConnection).apply {
-                connectTimeout = 7000; readTimeout = 7000; useCaches = false
-            }
-            if (c.responseCode != 200) return Remote.NO_NETWORK
-            c.inputStream.bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
-            return Remote.NO_NETWORK
-        }
-        val json = runCatching { org.json.JSONObject(body) }.getOrNull() ?: return Remote.NO_NETWORK
-        fun has(key: String): Boolean {
-            val a = json.optJSONArray(key) ?: return false
-            return (0 until a.length()).any { a.optString(it).trim().equals(code, ignoreCase = true) }
-        }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return when {
-            has("blocked") -> {
-                prefs.edit().clear().apply(); cachedOk = false
-                SelfDiag.log("license", "GitHub: bloklanıb — kilidləndi", mapOf("kod" to code))
-                Remote.BLOCKED
-            }
-            has("approved") -> {
-                prefs.edit().putString(KEY_REMOTE_APPROVED, code).apply(); cachedOk = true
-                SelfDiag.log("license", "GitHub: onlayn təsdiqləndi", mapOf("kod" to code))
-                Remote.APPROVED
-            }
-            else -> Remote.NOT_LISTED
-        }
     }
 
     private fun sha256(input: String): String =
