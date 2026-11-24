@@ -71,13 +71,31 @@ class MainActivity : ComponentActivity() {
             this, packageReceiver, filter, ContextCompat.RECEIVER_EXPORTED
         )
 
+        // Sorğu kodu jurnala — sahib maşını licenses.json-a əlavə etmək üçün adb ilə oxuya bilsin
+        runCatching {
+            az.q07.launcher.data.SelfDiag.log("license", "sorğu kodu",
+                mapOf("kod" to az.q07.launcher.data.GitHubLicenseAndOtaManager.getVehicleRequestCode(applicationContext)))
+        }
         setContent {
             CarLauncherTheme {
+                val lic = az.q07.launcher.data.GitHubLicenseAndOtaManager
                 var activated by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(az.q07.launcher.data.LicenseManager.isActivated(applicationContext))
+                    androidx.compose.runtime.mutableStateOf(lic.isLocallyActivated(applicationContext))
+                }
+                var ota by androidx.compose.runtime.remember {
+                    androidx.compose.runtime.mutableStateOf<az.q07.launcher.data.OtaUpdateInfo?>(null)
+                }
+                // Aktivdirsə: GitHub-da "blocked" siyahısına düşübsə yenidən kilidlə; sonra OTA yeniləməni yoxla
+                androidx.compose.runtime.LaunchedEffect(activated) {
+                    if (activated) {
+                        lic.syncLicenseFromGitHub(applicationContext)
+                        if (!lic.isLocallyActivated(applicationContext)) { activated = false; return@LaunchedEffect }
+                        ota = lic.checkForOtaUpdate(az.q07.launcher.BuildConfig.VERSION_CODE)
+                    }
                 }
                 if (activated) {
                     LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
+                    ota?.let { info -> az.q07.launcher.ui.OtaUpdateBanner(info, onDismiss = { ota = null }) }
                 } else {
                     az.q07.launcher.ui.ActivationLockScreen(onUnlocked = { activated = true })
                 }
