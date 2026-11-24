@@ -46,8 +46,6 @@ jobs:
       - name: Build release APK (R8 optimized)
         env:
           Q07_KS_PASS: ${{ secrets.Q07_KS_PASS }}
-          # Lisenziya açarı — yalnız GitHub secret-də saxlanır, repoda yoxdur
-          Q07_LIC_SECRET: ${{ secrets.Q07_LIC_SECRET }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace

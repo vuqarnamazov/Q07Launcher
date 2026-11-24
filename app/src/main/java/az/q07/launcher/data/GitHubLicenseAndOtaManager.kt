@@ -18,8 +18,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 data class OtaUpdateInfo(
     val hasUpdate: Boolean,
@@ -31,11 +29,9 @@ data class OtaUpdateInfo(
 
 object GitHubLicenseAndOtaManager {
 
-    // DİQQƏT: Q07_Admin_Keygen.html faylındakı SECRET_KEY ilə EYNİ olmalıdır!
-    // Repo açıqdır — açar koda yazılmır, GitHub secret Q07_LIC_SECRET-dən yığılma zamanı gəlir (BuildConfig.LIC_K).
-    private val SECRET_KEY: String by lazy {
-        az.q07.launcher.BuildConfig.LIC_K.mapIndexed { i, v -> ((v xor (0x5A + i * 7)) and 0xFF).toChar() }.joinToString("")
-    }
+    // Asimmetrik lisenziya (ECDSA P-256): APK-da YALNIZ açıq açar var.
+    // Gizli açar yalnız sahibdədir (Q07_Admin_Keygen.html). APK tam sökülsə belə aktivasiya kodu yaradıla bilməz.
+    private const val PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtTewp5XYqT5AaaUTPiYtyMilGYW94LoODEFLZadHHAgkaZ5h4BSxmZXgt7XMQmiMPDWuO16rrMqL9oI8Whw5Ww=="
 
     // GitHub repo raw ünvanları (açıq repo — maşın parolsuz oxuya bilsin; "launcher" reposu gizlidir):
     private const val GITHUB_LICENSES_URL = "https://raw.githubusercontent.com/vuqarnamazov/Q07Launcher/main/licenses.json"
@@ -69,14 +65,36 @@ object GitHubLicenseAndOtaManager {
         return "Q07-${hash.substring(0, 4)}-${hash.substring(4, 8)}".also { cachedRequestCode = it }
     }
 
-    // 2. Oflayn HMAC-SHA256 təsdiq kodunu hesablayır
-    fun computeExpectedOfflineCode(requestCode: String): String {
-        if (SECRET_KEY.isEmpty()) return "-" // açar yığılmaya düşməyibsə oflayn kod işləmir (yalnız onlayn)
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(SECRET_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-        val rawHmac = mac.doFinal(requestCode.trim().uppercase().toByteArray(Charsets.UTF_8))
-        val hex = rawHmac.joinToString("") { "%02X".format(it) }
-        return "${hex.substring(0, 4)}-${hex.substring(4, 8)}-${hex.substring(8, 12)}"
+    // 2. Oflayn aktivasiya imzasını (Base64) açıq açarla yoxlayır.
+    //    Sahib keygen-də sorğu kodunu gizli açarla imzalayır → bu imza yalnız həmin koda (həmin VIN-ə) yarayır.
+    private fun verifyOfflineSignature(requestCode: String, signatureB64: String): Boolean {
+        return try {
+            val keyBytes = android.util.Base64.decode(PUBLIC_KEY_B64, android.util.Base64.DEFAULT)
+            val pub = java.security.KeyFactory.getInstance("EC")
+                .generatePublic(java.security.spec.X509EncodedKeySpec(keyBytes))
+            val sigRaw = android.util.Base64.decode(signatureB64.trim(), android.util.Base64.DEFAULT)
+            val der = if (sigRaw.size == 64) p1363ToDer(sigRaw) else sigRaw // WebCrypto (r||s) → DER
+            java.security.Signature.getInstance("SHA256withECDSA").run {
+                initVerify(pub)
+                update(requestCode.trim().uppercase().toByteArray(Charsets.UTF_8))
+                verify(der)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // WebCrypto imzası 64 baytdır (r||s); Java DER gözləyir — çeviririk.
+    private fun p1363ToDer(sig: ByteArray): ByteArray {
+        fun trim(b: ByteArray): ByteArray {
+            var i = 0; while (i < b.size - 1 && b[i].toInt() == 0) i++
+            var r = b.copyOfRange(i, b.size)
+            if (r[0].toInt() and 0x80 != 0) r = byteArrayOf(0) + r
+            return r
+        }
+        val r = trim(sig.copyOfRange(0, 32)); val sPart = trim(sig.copyOfRange(32, 64))
+        val content = byteArrayOf(0x02, r.size.toByte()) + r + byteArrayOf(0x02, sPart.size.toByte()) + sPart
+        return byteArrayOf(0x30, content.size.toByte()) + content
     }
 
     // Bizim imza sertifikatının SHA-256 izi — yalnız bu açarla imzalanmış APK keçərlidir.
@@ -125,18 +143,17 @@ object GitHubLicenseAndOtaManager {
         val reqCode = getVehicleRequestCode(context)
         // Onlayn təsdiq bu maşının kodu ilə yadda saxlanır: prefs başqa maşına köçürülsə, kod uyğun gəlməyəcək
         if (prefs.getString(KEY_REMOTE_APPROVED, null) == reqCode) return true
-        // Oflayn token da yalnız bu maşının VIN-i üçün keçərlidir
-        val savedToken = prefs.getString(KEY_OFFLINE_TOKEN, null) ?: return false
-        return savedToken == computeExpectedOfflineCode(reqCode)
+        // Oflayn imza da yalnız bu maşının VIN-i üçün keçərlidir (başqa maşında kod fərqli olur)
+        val savedSig = prefs.getString(KEY_OFFLINE_TOKEN, null) ?: return false
+        return verifyOfflineSignature(reqCode, savedSig)
     }
 
-    // 4. Əllə daxil edilən kodu yoxlayır
+    // 4. Sahibin verdiyi oflayn aktivasiya imzasını yoxlayır və saxlayır
     fun verifyManualCode(context: Context, inputCode: String): Boolean {
         if (!hasOwnerSignature(context)) return false
         val reqCode = getVehicleRequestCode(context)
-        val expected = computeExpectedOfflineCode(reqCode)
-        val clean = inputCode.trim().uppercase()
-        return if (clean == expected) {
+        val clean = inputCode.trim()
+        return if (verifyOfflineSignature(reqCode, clean)) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(KEY_OFFLINE_TOKEN, clean).apply()
             true

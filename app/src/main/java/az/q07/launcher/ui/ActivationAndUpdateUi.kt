@@ -79,7 +79,7 @@ fun ActivationLockScreen(onUnlocked: () -> Unit) {
                 OutlinedTextField(
                     value = inputCode,
                     onValueChange = { inputCode = it; isError = false },
-                    label = { Text("Oflayn Təsdiq Kodu (XXXX-XXXX-XXXX)") },
+                    label = { Text("Oflayn aktivasiya kodu (sahibdən — yapışdırın)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -1,6 +1,6 @@
 {
-  "versionCode": 54,
-  "versionName": "1.53",
-  "changelog": "Kopyalanmaya qarşı qoruma: aktivasiya VIN-ə bağlanır, imza yoxlanışı.",
-  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.53/app-release.apk"
+  "versionCode": 55,
+  "versionName": "1.54",
+  "changelog": "Asimmetrik lisenziya (ECDSA): gizli açar yalnız sahibdə.",
+  "apkUrl": "https://github.com/vuqarnamazov/Q07Launcher/releases/download/v1.54/app-release.apk"
 }
