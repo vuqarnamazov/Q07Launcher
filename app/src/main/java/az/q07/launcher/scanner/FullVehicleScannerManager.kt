@@ -34,6 +34,8 @@ object FullVehicleScannerManager {
     }
 
     private const val PREFS = "full_scanner"
+    private const val KEY_MODE = "mode"
+    private const val KEY_AUTO_CONTINUE = "auto_continue"
     private const val IDLE_COMMIT_MS = 12_000L
     private const val MAX_STEPS = 40
     private const val MAX_SNAPSHOT_NODES = 300
@@ -90,9 +92,20 @@ object FullVehicleScannerManager {
         appContext = context.applicationContext
         VehicleStructureRepository.init(context)
         LearnedFunctionsRepository.init(context)
+        SystemKnowledgeReport.init(context)
+        // İlk açılışda öyrənmə fon rejimində başlayır: pəncərəni bağlasan da hər şey yazılır
         _mode.value = runCatching {
-            Mode.valueOf(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("mode", Mode.OFF.name)!!)
-        }.getOrDefault(Mode.OFF)
+            Mode.valueOf(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_MODE, Mode.BACKGROUND.name)!!)
+        }.getOrDefault(Mode.BACKGROUND)
+        SystemKnowledgeReport.refresh(context)
+    }
+
+    /** Skaner pəncərəsi bağlananda öyrənmə fon rejimində davam etsin (standart: bəli) */
+    fun autoContinue(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_AUTO_CONTINUE, true)
+
+    fun setAutoContinue(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_AUTO_CONTINUE, on).apply()
     }
 
     fun restoreIfNeeded(context: Context) {
@@ -103,7 +116,7 @@ object FullVehicleScannerManager {
     fun setMode(context: Context, m: Mode) {
         init(context)
         val old = _mode.value
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("mode", m.name).apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_MODE, m.name).apply()
         if (m != Mode.OFF) SelfDiag.ensureAccessibility(context.applicationContext)
         if (old == Mode.BACKGROUND && m != Mode.BACKGROUND) {
             commitSession("rejim dəyişdi")
@@ -111,7 +124,11 @@ object FullVehicleScannerManager {
         }
         _mode.value = m
         if (m == Mode.BACKGROUND) { _events.value = 0; startService(context) }
-        if (m == Mode.OFF) { commitSession("söndürüldü"); VehicleStructureRepository.flushNow() }
+        if (m == Mode.OFF) {
+            commitSession("söndürüldü")
+            VehicleStructureRepository.flushNow()
+            SystemKnowledgeReport.refresh(context, force = true)
+        }
         SelfDiag.log("fullscanner", "rejim: ${m.label}")
     }
 
@@ -122,7 +139,15 @@ object FullVehicleScannerManager {
     fun setScreenVisible(v: Boolean) {
         _screenVisible.value = v
         if (v && isLearning()) main.post { snapshot() }
-        if (!v && _mode.value == Mode.OPEN) commitSession("skaner ekranı bağlandı")
+        if (!v && _mode.value == Mode.OPEN) {
+            commitSession("skaner ekranı bağlandı")
+            // Pəncərəni bağlasaq da öyrənmə dayanmır — fon izləməsinə keçir
+            val ctx = appContext
+            if (ctx != null && autoContinue(ctx) && FactoryBridge.isEnabled(ctx)) {
+                setMode(ctx, Mode.BACKGROUND)
+                SelfDiag.log("fullscanner", "pəncərə bağlandı — fon izləməsi davam edir")
+            }
+        }
     }
 
     private fun startService(context: Context) {

@@ -56,6 +56,7 @@ import az.q07.launcher.scanner.FullVehicleScannerManager.Mode
 import az.q07.launcher.scanner.LearnedFunction
 import az.q07.launcher.scanner.LearnedFunctionsRepository
 import az.q07.launcher.scanner.MotionState
+import az.q07.launcher.scanner.SystemKnowledgeReport
 import az.q07.launcher.scanner.VehicleStructureRepository
 import az.q07.launcher.ui.theme.CarColors
 
@@ -83,6 +84,7 @@ fun ScannerModeControl(modifier: Modifier = Modifier, showStats: Boolean = true)
     val screens by VehicleStructureRepository.screens.collectAsState()
     val edges by VehicleStructureRepository.edges.collectAsState()
     val flows by VehicleStructureRepository.flows.collectAsState()
+    val knowledge by SystemKnowledgeReport.summary.collectAsState()
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -105,14 +107,35 @@ fun ScannerModeControl(modifier: Modifier = Modifier, showStats: Boolean = true)
             val mc = when (motion) { MotionState.MOVING -> CarColors.Green; MotionState.STOPPED -> CarColors.Warning; else -> CarColors.TextSecondary }
             Text(
                 "${motion.label}${speed?.let { " · ${it.toInt()} km/s" } ?: ""} · ${screens.size} ekran · " +
-                    "${edges.size} yol · ${flows.size} funksiya/gedişat",
+                    "${edges.size} yol · ${flows.size} funksiya/gedişat · ${knowledge.knownButtons}/${knowledge.buttons} düymə bilinir",
                 fontSize = 13.sp, color = mc
             )
             if (mode != Mode.OFF && !FullVehicleScannerManager.isAccessibilityReady(context)) {
                 Text("⚠ Xüsusi imkan xidməti aktiv deyil — heç nə öyrənilmir", fontSize = 13.sp, color = CarColors.Danger)
             }
-            if (mode == Mode.OPEN) Text("Açıq rejim: yalnız skaner ekranı açıq olanda öyrənir", fontSize = 12.sp, color = CarColors.TextSecondary)
+            if (mode == Mode.OPEN) Text(
+                "Açıq rejim: pəncərəni bağlasan da öyrənmə fon rejimində davam edir (Ayarlardan söndürülə bilər)",
+                fontSize = 12.sp, color = CarColors.TextSecondary
+            )
         }
+    }
+}
+
+/** Bilik hesabatı: neçə düymə öyrənilib, nə çatmir, fayl haradadır */
+@Composable
+fun KnowledgeLine(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val k by SystemKnowledgeReport.summary.collectAsState()
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            "Bilik: ${k.knownButtons}/${k.buttons} düymə (${k.percent}%) · çatışmayan məlumat: ${k.missing}",
+            fontSize = 13.sp, color = if (k.missing == 0) CarColors.Green else CarColors.Warning
+        )
+        Text(
+            "Bütün öyrənilənlər bir faylda: diag/system_knowledge.md",
+            fontSize = 11.sp, color = CarColors.TextSecondary
+        )
+        ScPill("Bilik hesabatını aç", null, ScannerAccent) { openScannerScreen(context) }
     }
 }
 

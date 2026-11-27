@@ -62,9 +62,11 @@ class VehicleScannerService : Service() {
             FullVehicleScannerManager.updateMotion(speed)
             val m = FullVehicleScannerManager
             val r = VehicleStructureRepository
+            val k = SystemKnowledgeReport.refresh(this)
             val text = if (!m.isAccessibilityReady(this)) "⚠ Xüsusi imkan xidməti aktiv deyil — heç nə öyrənilmir"
             else "${m.motion.value.label}${speed?.let { " · ${it.toInt()} km/s" } ?: ""}" +
-                " · ${r.screens.value.size} ekran · ${r.edges.value.size} yol · ${r.flows.value.size} gedişat/funksiya"
+                " · ${r.screens.value.size} ekran · ${r.edges.value.size} yol · ${r.flows.value.size} gedişat" +
+                " · bilik ${k.knownButtons}/${k.buttons} düymə, çatışmır ${k.missing}"
             if (text != lastText) {
                 lastText = text
                 getSystemService(NotificationManager::class.java).notify(NOTIF_ID, build(text))

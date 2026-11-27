@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import az.q07.launcher.ui.KnowledgeLine
 import az.q07.launcher.ui.LearnedFunctionsList
 import az.q07.launcher.ui.PlayerStatusLine
 import az.q07.launcher.ui.ScPill
@@ -42,6 +43,7 @@ object VehicleScannerModule : LauncherModule {
                 ScPill("Funksiya / Gedişat Götür və Əlavə Et", Icons.Filled.Add, CarColors.Green) { openScannerScreen(context) }
             }
             PlayerStatusLine()
+            KnowledgeLine()
         }
     }
 
