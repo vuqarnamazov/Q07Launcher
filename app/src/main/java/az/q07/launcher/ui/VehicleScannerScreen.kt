@@ -16,15 +16,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,13 +55,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import az.q07.launcher.data.AppSettings
+import az.q07.launcher.data.EngineFlowBinding
+import az.q07.launcher.data.VehicleEngineController
 import az.q07.launcher.scanner.FlowImporter
 import az.q07.launcher.scanner.FullVehicleScannerManager
 import az.q07.launcher.scanner.FullVehicleScannerManager.Mode
+import az.q07.launcher.scanner.LearnedFunctionsRepository
 import az.q07.launcher.scanner.NavigationEdge
 import az.q07.launcher.scanner.NodeInfo
 import az.q07.launcher.scanner.RecordedFlow
 import az.q07.launcher.scanner.ScreenNodeMap
+import az.q07.launcher.scanner.SystemKnowledgeReport
 import az.q07.launcher.scanner.VehicleStructureRepository
 import az.q07.launcher.ui.theme.CarColors
 import az.q07.launcher.ui.theme.CarLauncherTheme
@@ -76,7 +87,7 @@ class VehicleScannerActivity : ComponentActivity() {
 }
 
 private enum class ScTab(val title: String) {
-    LIVE("Canlı ekran"), SCREENS("Ekranlar"), PATHS("Yollar"), FLOWS("Gedişatlar"), IMPORT("Götür və Əlavə Et"), LAUNCHER("Launcher funksiyaları")
+    LIVE("Canlı ekran"), SCREENS("Ekranlar"), PATHS("Yollar"), FLOWS("Gedişatlar"), IMPORT("Götür və Əlavə Et"), LAUNCHER("Launcher funksiyaları"), KNOWLEDGE("Bilik")
 }
 
 @Composable
@@ -112,9 +123,10 @@ fun VehicleScannerScreen(onClose: () -> Unit) {
                 ScTab.LIVE -> LiveTab(pick)
                 ScTab.SCREENS -> ScreensTab(pick)
                 ScTab.PATHS -> PathsTab()
-                ScTab.FLOWS -> FlowsTab(pick)
+                ScTab.FLOWS -> FlowsTab(pick) { info = it }
                 ScTab.IMPORT -> ImportTab(pick) { info = it }
                 ScTab.LAUNCHER -> LazyColumn { item { LearnedFunctionsList() } }
+                ScTab.KNOWLEDGE -> KnowledgeTab()
             }
         }
     }
@@ -268,11 +280,12 @@ private fun PathsTab() {
 // ───────────────────────── Gedişatlar ─────────────────────────
 
 @Composable
-private fun FlowsTab(pick: (FlowImporter.Candidate) -> Unit) {
+private fun FlowsTab(pick: (FlowImporter.Candidate) -> Unit, onInfo: (String) -> Unit) {
     val flows by VehicleStructureRepository.flows.collectAsState()
     var kind by remember { mutableStateOf<RecordedFlow.Kind?>(null) }
     var open by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<RecordedFlow?>(null) }
+    var binding by remember { mutableStateOf<RecordedFlow?>(null) }
     val list = remember(flows, kind) { flows.filter { kind == null || it.kind == kind } }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ScChipRow {
@@ -280,6 +293,7 @@ private fun FlowsTab(pick: (FlowImporter.Candidate) -> Unit) {
             ScChip("Funksiyalar", kind == RecordedFlow.Kind.FUNCTION) { kind = RecordedFlow.Kind.FUNCTION }
             ScChip("Gedişatlar", kind == RecordedFlow.Kind.FLOW) { kind = RecordedFlow.Kind.FLOW }
         }
+        EngineBindingCard { onInfo(it) }
         if (list.isEmpty()) Text("Hələ qeyd yoxdur.", color = CarColors.TextSecondary)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(list, key = { it.id }) { f ->
@@ -290,6 +304,7 @@ private fun FlowsTab(pick: (FlowImporter.Candidate) -> Unit) {
                             Text("${f.kind.label} · ×${f.count} · ${f.steps.size} addım · hərəkətdə ${f.movingCount} / dayanıb ${f.stoppedCount}",
                                 fontSize = 12.sp, color = CarColors.TextSecondary)
                         }
+                        ScIconBtn(Icons.Filled.DirectionsCar, "Mühərrik düyməsinə qoy", CarColors.Green) { binding = f }
                         ScPill("Götür", Icons.Filled.Add, CarColors.Green) { pick(FlowImporter.Candidate.Recorded(f, 0)) }
                         ScIconBtn(Icons.Filled.Edit, "Ad") { renaming = f }
                         ScIconBtn(Icons.Filled.Delete, "Sil", CarColors.Danger) { VehicleStructureRepository.deleteFlow(f.id) }
@@ -303,6 +318,168 @@ private fun FlowsTab(pick: (FlowImporter.Candidate) -> Unit) {
         }
     }
     renaming?.let { f -> ScRenameDialog(f.name, { renaming = null }) { VehicleStructureRepository.renameFlow(f.id, it); renaming = null } }
+    binding?.let { f -> EngineBindDialog(f, { binding = null }) { onInfo(it) } }
+}
+
+/** Mühərrik START/STOP düymələrinə bağlanmış yol + skanerdən tapılan uyğun yol. */
+@Composable
+private fun EngineBindingCard(onInfo: (String) -> Unit) {
+    val context = LocalContext.current
+    val learned by LearnedFunctionsRepository.items.collectAsState()
+    val flows by VehicleStructureRepository.flows.collectAsState()
+    var startId by remember { mutableStateOf(VehicleEngineController.getFlowId(context, true)) }
+    var stopId by remember { mutableStateOf(VehicleEngineController.getFlowId(context, false)) }
+    val startName = learned.firstOrNull { it.id == startId }?.name
+    val stopName = learned.firstOrNull { it.id == stopId }?.name
+    val suggestion = remember(flows, learned) { EngineFlowBinding.candidates(true, 1).firstOrNull() }
+    // Pay Charging / doldurma rejimində qeydə alınmış yollar — ən yenisi birinci
+    val chargingFlows = remember(flows) {
+        flows.filter { it.steps.isNotEmpty() && EngineFlowBinding.isCharging(it.steps) }.take(3)
+    }
+
+    ScCard {
+        Text("Mühərrik düyməsi (yalnız P)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
+        Text(
+            "START: ${startName ?: "seçilməyib"} · STOP: ${stopName ?: "seçilməyib"}",
+            fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            color = if (startName != null) CarColors.Green else CarColors.Warning
+        )
+        if (suggestion != null) {
+            Text(
+                "Skanerdən uyğun yol: ${suggestion.name}" + (if (suggestion.charging) " · doldurma / Pay Charging" else ""),
+                fontSize = 12.sp, color = CarColors.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScPill("START-a qoy", Icons.Filled.PlayArrow, CarColors.Green) {
+                    val fn = EngineFlowBinding.assign(context, suggestion, true)
+                    startId = fn.id
+                    onInfo("✓ Mühərrik START: ${fn.name}")
+                }
+                ScPill("STOP-a qoy", Icons.Filled.Stop, CarColors.Danger) {
+                    val fn = EngineFlowBinding.assign(context, suggestion, false)
+                    stopId = fn.id
+                    onInfo("✓ Mühərrik STOP: ${fn.name}")
+                }
+            }
+        } else {
+            Text(
+                "Skanerdə «işə sal» sözlü yol hələ yoxdur — aşağıdakı Pay Charging yolunu seç və ya maşının ekranında «işə sal»ı bir dəfə bas.",
+                fontSize = 12.sp, color = CarColors.TextSecondary
+            )
+        }
+        if (chargingFlows.isNotEmpty()) {
+            Text(
+                "Pay Charging / doldurma yolları (skaner qeydləri)",
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary
+            )
+            chargingFlows.forEach { f ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        f.name, fontSize = 12.sp, color = CarColors.TextSecondary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    )
+                    ScPill("START", Icons.Filled.PlayArrow, CarColors.Green) {
+                        val fn = EngineFlowBinding.assign(context, EngineFlowBinding.fromFlow(f, true), true)
+                        startId = fn.id
+                        onInfo("✓ Mühərrik START: ${fn.name}")
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    ScPill("STOP", Icons.Filled.Stop, CarColors.Danger) {
+                        val fn = EngineFlowBinding.assign(context, EngineFlowBinding.fromFlow(f, false), false)
+                        stopId = fn.id
+                        onInfo("✓ Mühərrik STOP: ${fn.name}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** «Gedişatlar» siyahısından birbaşa mühərrik düyməsinə bağlama. */
+@Composable
+private fun EngineBindDialog(flow: RecordedFlow, onDismiss: () -> Unit, onInfo: (String) -> Unit) {
+    val context = LocalContext.current
+    val startCandidate = remember(flow) { EngineFlowBinding.fromFlow(flow, true) }
+    ScaledAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mühərrik düyməsinə qoy") },
+        text = {
+            Column(
+                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(flow.name, fontSize = 15.sp, color = CarColors.TextPrimary)
+                Text(
+                    "${flow.steps.size} addım · ×${flow.count}" +
+                        (if (startCandidate.charging) " · doldurma / Pay Charging" else ""),
+                    fontSize = 12.sp, color = CarColors.TextSecondary
+                )
+                StepsList(flow.steps)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val fn = EngineFlowBinding.assign(context, startCandidate, true)
+                onInfo("✓ Mühərrik START: ${fn.name}")
+                onDismiss()
+            }) { Text("START-a qoy") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    val fn = EngineFlowBinding.assign(context, EngineFlowBinding.fromFlow(flow, false), false)
+                    onInfo("✓ Mühərrik STOP: ${fn.name}")
+                    onDismiss()
+                }) { Text("STOP-a qoy") }
+                TextButton(onClick = onDismiss) { Text("Bağla") }
+            }
+        }
+    )
+}
+
+// ───────────────────────── Bilik hesabatı ─────────────────────────
+
+/** Öyrənilən bütün sistem: hansı düymə nə edir, nə çatmır — tək fayl. */
+@Composable
+private fun KnowledgeTab() {
+    val context = LocalContext.current
+    val summary by SystemKnowledgeReport.summary.collectAsState()
+    val missing by SystemKnowledgeReport.missing.collectAsState()
+    var fileText by remember { mutableStateOf<String?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ScCard {
+            Text("Öyrənilmiş sistem: ${summary.knownButtons}/${summary.buttons} düymə (${summary.percent}%)",
+                fontSize = 15.sp, color = CarColors.TextPrimary)
+            Text("${summary.screens} ekran · ${summary.flows} gedişat/funksiya · çatışmayan məlumat: ${summary.missing}",
+                fontSize = 12.sp, color = CarColors.TextSecondary)
+            Text("Fayl: ${summary.path.ifBlank { "hazırlanır…" }}", fontSize = 11.sp, color = CarColors.TextSecondary)
+        }
+        ScChipRow {
+            ScChip("Hesabatı yenilə", false) {
+                SystemKnowledgeReport.refresh(context, force = true)
+                fileText = SystemKnowledgeReport.read(context)
+            }
+            ScChip("Faylı göstər", false) { fileText = SystemKnowledgeReport.read(context) }
+            if (fileText != null) ScChip("Gizlət", false) { fileText = null }
+        }
+        fileText?.let { t ->
+            Text(
+                t, fontSize = 11.sp, color = CarColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                    .background(CarColors.Panel).padding(10.dp)
+            )
+        }
+        if (missing.isEmpty()) Text("Çatışmayan məlumat yoxdur ✓", fontSize = 14.sp, color = CarColors.Green)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(missing, key = { "${it.kind}|${it.where}|${it.what}" }) { m ->
+                ScCard {
+                    Text("${m.kind} · ${m.where}", fontSize = 13.sp, color = CarColors.TextPrimary)
+                    Text(m.what, fontSize = 12.sp, color = CarColors.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
 }
 
 // ───────────────────────── Götür və Əlavə Et ─────────────────────────

@@ -34,31 +34,67 @@ object FlowPlayer {
     private val _status = MutableStateFlow<String?>(null)
     val status: StateFlow<String?> = _status
 
-    fun play(context: Context, fn: LearnedFunction) {
+    /**
+     * [returnToLauncher] — gedişat bitəndən sonra launcher öne qaytarılır (paneldə qalmasın).
+     * [stepDelayOverrideMs] — addımlar arası gecikməni qısaltmaq üçün (mühərrik əmri: 400 ms).
+     * [onResult] — gedişat BİTDİKDƏ çağırılır: (uğurlu, mesaj, ən azı bir basış baş verdi).
+     * Qaytarılan dəyər: gedişat qəbul olundu (false = başlamadı, [status] səbəbi göstərir).
+     */
+    fun play(
+        context: Context,
+        fn: LearnedFunction,
+        returnToLauncher: Boolean = false,
+        stepDelayOverrideMs: Long? = null,
+        /** false = element tapılmasa köhnə koordinata toxunma (mühərrik əmri üçün) */
+        allowCoordTap: Boolean = true,
+        onResult: ((success: Boolean, message: String, clicked: Boolean) -> Unit)? = null
+    ): Boolean {
         val ctx = context.applicationContext
-        if (_playing.value) { _status.value = "Başqa gedişat icra olunur"; return }
+        if (_playing.value) {
+            _status.value = "Başqa gedişat icra olunur"
+            onResult?.invoke(false, _status.value!!, false)
+            return false
+        }
         val svc = FactoryBridge.service
-        if (svc == null) { _status.value = "Xüsusi imkan xidməti aktiv deyil"; return }
+        if (svc == null) {
+            _status.value = "Xüsusi imkan xidməti aktiv deyil"
+            onResult?.invoke(false, _status.value!!, false)
+            return false
+        }
         LearnedFunctionsRepository.markRun(fn.id)
         job = scope.launch {
             _playing.value = true
             var failed: String? = null
+            var clicked = false
+            android.util.Log.i("Q07TT", "səssiz icra başladı: ${fn.name} (${fn.steps.size} addım)")
             try {
                 for ((i, s) in fn.steps.withIndex()) {
                     _status.value = "${fn.name} — ${i + 1}/${fn.steps.size}: ${s.label()}"
+                    android.util.Log.i("Q07TT", "addım ${i + 1}/${fn.steps.size}: ${s.type} ${s.label()} pkg=${s.packageName}")
                     val ok = when (s.type) {
                         FlowStep.Type.WINDOW -> openWindow(ctx, s)
-                        FlowStep.Type.CLICK -> click(ctx, svc, s)
+                        FlowStep.Type.CLICK -> click(ctx, svc, s, allowCoordTap)
                     }
                     if (!ok) { failed = "Addım ${i + 1} alınmadı: ${s.label()}"; break }
-                    if (i < fn.steps.lastIndex) delay(fn.stepDelayMs)
+                    if (s.type == FlowStep.Type.CLICK) clicked = true
+                    if (i < fn.steps.lastIndex) delay(stepDelayOverrideMs ?: fn.stepDelayMs)
                 }
             } finally {
                 _playing.value = false
             }
-            _status.value = failed ?: "✓ ${fn.name} icra olundu"
+            val message = failed ?: "✓ ${fn.name} icra olundu"
+            _status.value = message
+            android.util.Log.i("Q07TT", if (failed == null) "səssiz icra bitdi: $message" else "səssiz icra alınmadı: $failed")
+            // Nəticə launcher-ə qayıtmazdan ƏVVƏL bildirilir ki, düymə vəziyyəti düzgün yenilənsin
+            onResult?.invoke(failed == null, message, clicked)
             SelfDiag.log("scanner", "gedişat icrası", mapOf("name" to fn.name, "result" to (failed ?: "ok")))
+            // Uğursuzluqda pəncərə açıq qalır — istifadəçi düyməni əl ilə basa bilsin (skaner öyrənsin)
+            if (returnToLauncher && failed == null) {
+                delay(150)
+                QuickActions.launchPackage(ctx, "az.q07.launcher")
+            }
         }
+        return true
     }
 
     fun stop() { job?.cancel(); _playing.value = false; _status.value = "Dayandırıldı" }
@@ -74,21 +110,47 @@ object FlowPlayer {
     private suspend fun openWindow(ctx: Context, s: FlowStep): Boolean {
         if (FullVehicleScannerManager.foregroundPackage == s.packageName && FullVehicleScannerManager.foregroundClass == s.className) return true
         val launched = (s.className.isNotBlank() &&
-            QuickActions.start(ctx, Intent(Intent.ACTION_MAIN).setComponent(ComponentName(s.packageName, s.className)))) ||
-            QuickActions.launchPackage(ctx, s.packageName)
+            QuickActions.start(
+                ctx,
+                Intent(Intent.ACTION_MAIN)
+                    .setComponent(ComponentName(s.packageName, s.className))
+                    .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            )) || QuickActions.launchPackage(ctx, s.packageName)
         if (!launched) return false
         return waitFor(5000) { FullVehicleScannerManager.foregroundPackage == s.packageName }
     }
 
-    private suspend fun click(ctx: Context, svc: DriveModeService, s: FlowStep): Boolean {
+    /**
+     * Səssiz icra üçün tətbiqi birbaşa ön plana çıxarır.
+     * [QuickActions.launchPackage] yan-panel ölçüləri ilə açır və pəncərə launcherin arxasında qala bilir —
+     * replay zamanı hədəf ekran görünməlidir, əks halda element tapılmır.
+     */
+    private fun launchForeground(ctx: Context, s: FlowStep): Boolean {
+        // CLICK addımındakı className düymənin sinfidir, activity deyil — yalnız paket launch intent-i istifadə olunur
+        val intent = ctx.packageManager.getLaunchIntentForPackage(s.packageName)
+            ?: Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setPackage(s.packageName)
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        )
+        val res = runCatching { ctx.startActivity(intent) }
+        android.util.Log.i("Q07TT", "launch ${s.packageName} -> ${res.isSuccess} ${res.exceptionOrNull()?.javaClass?.simpleName ?: ""}")
+        return res.isSuccess
+    }
+
+    private suspend fun click(ctx: Context, svc: DriveModeService, s: FlowStep, allowCoordTap: Boolean): Boolean {
         if (!onScreen(svc, s.packageName)) {
-            if (!QuickActions.launchPackage(ctx, s.packageName)) return false
+            if (!launchForeground(ctx, s)) return false
             if (!waitFor(5000) { onScreen(svc, s.packageName) }) return false
             delay(400)
         }
         var node: AccessibilityNodeInfo? = null
-        waitFor(4000) { node = findNode(svc, s); node != null }
+        waitFor(6000) { node = findNode(svc, s); node != null }
+        android.util.Log.i("Q07TT", "node ${s.label()} -> ${node != null} (roots=${svc.scannerRoots().map { it.packageName }.distinct()})")
         val n = node
+        if (n != null) delay(250)
         if (n != null) {
             val clicked = generateSequence(n) { it.parent }.firstOrNull { it.isClickable }
                 ?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
@@ -96,8 +158,8 @@ object FlowPlayer {
             val r = Rect().also { n.getBoundsInScreen(it) }
             svc.scannerTap(r.exactCenterX(), r.exactCenterY()); return true
         }
-        // element tapılmadı — qeydə alınmış koordinata toxun
-        if (s.bounds.size == 4 && s.bounds[2] > s.bounds[0] && s.bounds[3] > s.bounds[1]) {
+        // element tapılmadı — qeydə alınmış koordinata toxun (yalnız icazə verilibsə)
+        if (allowCoordTap && s.bounds.size == 4 && s.bounds[2] > s.bounds[0] && s.bounds[3] > s.bounds[1]) {
             svc.scannerTap((s.bounds[0] + s.bounds[2]) / 2f, (s.bounds[1] + s.bounds[3]) / 2f)
             return true
         }

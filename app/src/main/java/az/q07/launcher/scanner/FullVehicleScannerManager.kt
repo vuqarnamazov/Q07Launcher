@@ -344,6 +344,13 @@ object FullVehicleScannerManager {
             VehicleStructureRepository.recordFlow(RecordedFlow.Kind.FUNCTION, steps, "${appLabel(ctx, s.packageName)}: ${s.label()}", s.motion)
         }
         SelfDiag.log("fullscanner", "sessiya yazıldı ($reason)", mapOf("steps" to steps.size))
+        SystemKnowledgeReport.refresh(ctx, force = reason != "fasilə")
+        // Hər sessiyadan sonra mühərrik yollarını yenidən yoxla: yeni «işə sal / söndür»
+        // qeydi yazılıbsa START/STOP-a avtomatik bağlanır
+        runCatching {
+            az.q07.launcher.data.EngineFlowBinding.autoAssign(ctx, true)
+            az.q07.launcher.data.EngineFlowBinding.autoAssign(ctx, false)
+        }
     }
 
     // ───────────────────────── köməkçilər ─────────────────────────
