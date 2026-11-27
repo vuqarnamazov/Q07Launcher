@@ -116,6 +116,15 @@ object LearnedFunctionsRepository {
         save()
     }
 
+    /** Bütün öyrənilmiş yolları silir (sıfırdan öyrənmə üçün). */
+    @Synchronized
+    fun clearAll(): Int {
+        val n = _items.value.size
+        _items.value = emptyList()
+        save()
+        return n
+    }
+
     private fun save() {
         val f = file ?: return
         val snapshot = _items.value

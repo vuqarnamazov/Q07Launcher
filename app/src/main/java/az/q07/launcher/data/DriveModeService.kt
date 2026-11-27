@@ -184,7 +184,10 @@ class DriveModeService : AccessibilityService() {
         // Xidmət təzəcə başladı: qapı/zavod ekranı ön planda qalıbsa Q07-ni geri gətir
         main.postDelayed({ checkCurrentForeground() }, 1500)
     }
-    override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
+    override fun onDestroy() {
+        runCatching { az.q07.launcher.scanner.TtHoldCapture.stop() }
+        hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy()
+    }
     override fun onInterrupt() {}
 
     // ---------------- örtük ----------------

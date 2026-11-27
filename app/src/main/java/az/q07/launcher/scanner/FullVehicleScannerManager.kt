@@ -231,8 +231,7 @@ object FullVehicleScannerManager {
             intArrayOf(r.left, r.top, r.right, r.bottom), _motion.value
         )
         add(step)
-        // «tt» — aktiv tək-toxunuş öyrənmə sessiyası bu kliki idarəyə bağlayır
-        TtLearning.onClick(ctx, step)
+        // «tt» öyrənməsi kliki tutmur: hədəf yalnız uzun basışla seçilir (TtHoldCapture)
         val (sPkg, sCls) = screenOf(pkg)
         VehicleStructureRepository.recordClick(sPkg, sCls, step)
         pending = PendingClick(step, ScreenNodeMap.idOf(sPkg, sCls), lastVisible, SystemClock.elapsedRealtime())

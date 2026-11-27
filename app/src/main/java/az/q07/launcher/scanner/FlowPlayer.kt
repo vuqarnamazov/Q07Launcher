@@ -22,7 +22,8 @@ import kotlin.math.hypot
 /**
  * Öyrənilmiş funksiya/gedişatı xüsusi imkan xidməti ilə təkrar icra edir.
  * Çoxaddımlı gedişatda addımlar arasında [LearnedFunction.stepDelayMs] gecikmə olur.
- * Element əvvəlcə viewId → mətn → contentDescription ilə axtarılır; tapılmasa, qeydə alınmış koordinata toxunulur.
+ * Element əvvəlcə viewId → mətn → contentDescription ilə axtarılır; tapılmasa, qeydə alınmış
+ * sahəyə (bounds) görə ən dəqiq node seçilir.
  */
 object FlowPlayer {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -122,7 +123,7 @@ object FlowPlayer {
 
     /**
      * Səssiz icra üçün tətbiqi birbaşa ön plana çıxarır.
-     * [QuickActions.launchPackage] yan-panel ölçüləri ilə açır və pəncərə launcherin arxasında qala bilir —
+     * [QuickActions.launchPackage] yan-panel ölçüləri ilə açır və pəncərə launcherin arxasında qala bilər —
      * replay zamanı hədəf ekran görünməlidir, əks halda element tapılmır.
      */
     private fun launchForeground(ctx: Context, s: FlowStep): Boolean {
@@ -179,6 +180,15 @@ object FlowPlayer {
                     .filter { matchesText(it, s.text) }
             }
             if (candidates.isEmpty() && s.contentDescription.isNotBlank()) walkDesc(root, s.contentDescription, candidates, 0)
+            // viewId yoxdur və mətn alt nəsillərdə yığılıb (məs. «Ekran» LinearLayout-u) — ağac üzrə axtar
+            if (candidates.isEmpty() && (s.text.isNotBlank() || s.contentDescription.isNotBlank())) {
+                searchTree(root, s)?.let { candidates += it }
+            }
+            // heç nə tapılmadı — qeydə alınmış sahəyə görə ən dəqiq node
+            if (candidates.isEmpty() && s.bounds.size == 4) {
+                boundsFallback(root, s.bounds)?.let { candidates += it }
+            }
+            if (candidates.isNotEmpty()) break
         }
         val visible = candidates.filter { it.isVisibleToUser }.ifEmpty { candidates }
         if (visible.size <= 1 || s.bounds.size != 4) return visible.firstOrNull()
@@ -194,5 +204,93 @@ object FlowPlayer {
         if (n == null || d > 30) return
         if (n.contentDescription?.toString()?.trim() == desc) out += n
         for (i in 0 until n.childCount) walkDesc(n.getChild(i), desc, out, d + 1)
+    }
+
+    // ─────────────────── ehtiyat axtarış yolları (viewId-siz node-lar) ───────────────────
+
+    private fun normText(t: String?): String =
+        t.orEmpty().replace('\u00A0', ' ').trim().replace(Regex("\\s+"), " ")
+
+    private fun areaOf(r: Rect): Long =
+        r.width().toLong().coerceAtLeast(0) * r.height().toLong().coerceAtLeast(0)
+
+    /**
+     * Nəsil ağacı üzrə mətn axtarışı.
+     *
+     * Öyrənmə zamanı [FullVehicleScannerManager] klik node-unun mətnini alt nəsillərdən yığır
+     * (`childLabel`), ona görə hədəf konteynerin öz `text`/`contentDescription` sahəsi boş ola bilər və
+     * `findAccessibilityNodeInfosByText` onu qaytarmır. Burada hər node üçün eyni qayda ilə yığılmış
+     * etiket hesablanır: bərabərlik qismən uyğunluqdan, o da qeydə alınmış sahəyə yaxınlıqdan üstündür.
+     */
+    private fun searchTree(root: AccessibilityNodeInfo, s: FlowStep): AccessibilityNodeInfo? {
+        val target = normText(s.text).ifBlank { normText(s.contentDescription) }
+        if (target.isBlank()) return null
+        val targetRect = s.bounds.takeIf { it.size == 4 }?.let { Rect(it[0], it[1], it[2], it[3]) }
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = Double.MAX_VALUE
+        var visited = 0
+
+        fun visit(n: AccessibilityNodeInfo, depth: Int): String {
+            if (depth > 40 || visited++ > 4000) return ""
+            val own = normText(n.text?.toString()).ifBlank { normText(n.contentDescription?.toString()) }
+            // Alt nəsillər HƏMİŞƏ gəzilir — öz mətni olan konteynerin içindəki hədəflər də tapsın
+            val childLabels = StringBuilder()
+            for (i in 0 until n.childCount) {
+                val child = runCatching { n.getChild(i) }.getOrNull() ?: continue
+                val l = visit(child, depth + 1)
+                if (l.isBlank()) continue
+                if (childLabels.isNotEmpty()) childLabels.append(' ')
+                childLabels.append(l)
+                if (childLabels.length > 120) break
+            }
+            val label = own.ifBlank { childLabels.toString() }
+            if (label.isBlank() || !n.isVisibleToUser) return label
+            val rank = when {
+                own == target -> 0
+                label == target -> 1
+                own.length > target.length && own.length <= target.length * 3 && own.contains(target) -> 2
+                label.length > target.length && label.length <= target.length * 3 && label.contains(target) -> 3
+                else -> -1
+            }
+            if (rank < 0) return label
+            val r = Rect().also { n.getBoundsInScreen(it) }
+            val dist = if (targetRect != null)
+                hypot(r.exactCenterX() - targetRect.exactCenterX(), r.exactCenterY() - targetRect.exactCenterY()).toDouble()
+            else 0.0
+            val score = rank * 10_000.0 + dist.coerceAtMost(2_000.0) + areaOf(r) / 50_000.0
+            if (score < bestScore) { bestScore = score; best = n }
+            return label
+        }
+        visit(root, 0)
+        if (best != null) android.util.Log.i("Q07TT", "findNode: ağac uyğunluğu «$target» (score=${bestScore.toInt()})")
+        return best
+    }
+
+    /**
+     * Mətn heç yerdə uyğun gəlmədikdə: qeydə alınmış sahənin mərkəzini əhatə edən, sahəsi həddindən
+     * böyük olmayan ən kiçik görünən node. Ekran düzümü bir az dəyişsə də eyni element basılır;
+     * klik zamanı yenə ən yaxın `isClickable` valideynə qalxılır.
+     */
+    private fun boundsFallback(root: AccessibilityNodeInfo, b: IntArray): AccessibilityNodeInfo? {
+        if (b.size != 4 || b[2] <= b[0] || b[3] <= b[1]) return null
+        val target = Rect(b[0], b[1], b[2], b[3])
+        val cx = target.exactCenterX().toInt(); val cy = target.exactCenterY().toInt()
+        val maxArea = areaOf(target) * 8 + 4_000
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = Long.MAX_VALUE
+        var visited = 0
+
+        fun visit(n: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 40 || visited++ > 4000) return
+            val r = Rect().also { n.getBoundsInScreen(it) }
+            if (n.isVisibleToUser && r.contains(cx, cy)) {
+                val a = areaOf(r)
+                if (a >= 1 && a <= maxArea && a < bestArea) { bestArea = a; best = n }
+            }
+            for (i in 0 until n.childCount) visit(runCatching { n.getChild(i) }.getOrNull() ?: continue, depth + 1)
+        }
+        visit(root, 0)
+        if (best != null) android.util.Log.i("Q07TT", "findNode: bounds uyğunluğu $target (area=$bestArea)")
+        return best
     }
 }

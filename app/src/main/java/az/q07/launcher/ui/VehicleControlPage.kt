@@ -100,7 +100,7 @@ fun VehicleControlPage(modifier: Modifier = Modifier) {
             Column(Modifier.weight(1f)) {
                 Text("İDARƏETMƏ", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
                 Text(
-                    "tt · bir toxunuş: öyrən və ya səssiz icra · uzun basış: yolu sil",
+                    "tt · toxun: öyrən/icra et · hədəfi 2 san bas və saxla · uzun basış: yolu sil",
                     fontSize = 12.sp, color = CarColors.TextSecondary
                 )
             }
@@ -237,7 +237,7 @@ private fun ControlTile(
             )
             Text(
                 when {
-                    learning -> "hədəf düyməni bas…"
+                    learning -> "hədəfi 2 san bas və saxla…"
                     hasPath -> VehicleControlBindings.maskedPath(function)
                     else -> "toxun → öyrən"
                 },

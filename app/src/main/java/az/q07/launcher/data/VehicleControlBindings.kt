@@ -69,6 +69,13 @@ object VehicleControlBindings {
         prefs(context).edit().putString(PREFIX + controlId, functionId).apply()
     }
 
+    /** Bütün idarə bağlamalarını silir (sıfırdan öyrənmə üçün). */
+    fun clearAll(context: Context) {
+        val e = prefs(context).edit()
+        controls.forEach { e.remove(PREFIX + it.id) }
+        e.apply()
+    }
+
     /** İdarənin yolunu silir (öyrənilmiş funksiyanın özü skanerdə qalır). */
     fun unbind(context: Context, controlId: String) {
         prefs(context).edit().remove(PREFIX + controlId).apply()

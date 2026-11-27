@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         az.q07.launcher.data.VehicleTelemetryReader.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
+        // tt sxemi dəyişdi: köhnə (səhv yazılmış) yolları və bağlamaları bir dəfə sil
+        runCatching { az.q07.launcher.scanner.TtLearning.freshStartIfNeeded(applicationContext) }
         // Tam Skaner: bazalar + Fon İzləməsi əvvəl açıq idisə xidməti bərpa et
         az.q07.launcher.scanner.FullVehicleScannerManager.restoreIfNeeded(applicationContext)
         // Mühərrik START/STOP düymələrinə uyğun yolları fon axınında bağla —
