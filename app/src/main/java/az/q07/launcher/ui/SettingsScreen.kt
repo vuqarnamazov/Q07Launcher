@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Home
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.WbSunny
@@ -64,6 +66,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.NotificationManagerCompat
 import az.q07.launcher.BuildConfig
+import az.q07.launcher.data.AdbControl
 import az.q07.launcher.data.AppSettings
 import az.q07.launcher.data.ForegroundApp
 import az.q07.launcher.data.HomeMode
@@ -89,7 +92,9 @@ private enum class Section(val title: String, val icon: ImageVector) {
     Net("Şəbəkə: Telefon + OBD", Icons.Filled.Wifi),
     Weather("Hava", Icons.Filled.WbSunny),
     Perms("İcazələr", Icons.Filled.Security),
-    About("Haqqında / Yeniləmə", Icons.Filled.Info)
+    Diag("ADB / Diaqnostika", Icons.Filled.Build),
+    Update("Yeniləmə", Icons.Filled.Refresh),
+    About("Haqqında", Icons.Filled.Info)
 }
 
 @Composable
@@ -154,6 +159,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     }
                     Section.Weather -> WeatherSection()
                     Section.Perms -> PermsSection()
+                    Section.Diag -> AdbSection()
+                    Section.Update -> UpdateSection()
                     Section.About -> AboutSection()
                 }
             }
@@ -513,16 +520,127 @@ private fun PermsSection() {
     OutlinedButton(onClick = { QuickActions.openHomeSettings(context) }) { Text("Defolt əsas ekran ayarı") }
 }
 
-private data class UpdateInfo(val latest: Int, val url: String?, val error: String?)
+@Composable
+private fun AdbSection() {
+    val context = LocalContext.current
+    var adb by remember { mutableStateOf(AdbControl.isEnabled(context)) }
+    var always by remember { mutableStateOf(AdbControl.isAlways(context)) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    val ips = remember { AdbControl.ipv4Addresses() }
+
+    // «Həmişə aktiv» rejimi ADB-ni arxa planda yandıra bilir — vəziyyəti yeniləyirik
+    LaunchedEffect(Unit) {
+        while (true) {
+            adb = AdbControl.isEnabled(context)
+            always = AdbControl.isAlways(context)
+            kotlinx.coroutines.delay(3000)
+        }
+    }
+
+    Label(
+        if (adb) "ADB: aktiv ✓" else "ADB: söndürülüb",
+        "Kompüterdən launcher-i yeniləmək, jurnal və ekran görüntüsü almaq üçün. USB kabeli qoşulu olmalıdır."
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = {
+            val target = !adb
+            val ok = AdbControl.setEnabled(context, target)
+            adb = AdbControl.isEnabled(context)
+            msg = when {
+                ok -> if (target) "ADB açıldı ✓ — kompüterdə: adb devices" else "ADB söndürüldü"
+                target -> "Sistem avtomatik icazə vermədi — «Developer seçimləri» düyməsi ilə ekranı aç və USB debugging-i işə sal."
+                else -> "Sistem avtomatik icazə vermədi — «Developer seçimləri»ndən əl ilə söndür."
+            }
+        }) { Text(if (adb) "ADB-ni söndür" else "ADB-ni aktiv et") }
+        OutlinedButton(onClick = {
+            if (!AdbControl.openDeveloperSettings(context)) {
+                msg = "Developer seçimləri açılmadı — sistem ayarlarından tap."
+            }
+        }) { Text("Developer seçimləri") }
+    }
+    SwitchRow(
+        "Həmişə aktiv",
+        "Söndürülsə də avtomatik yenidən yandırılır — launcher hər açılışda yoxlayır (reboot-dan sonra da).",
+        always
+    ) { on ->
+        always = on
+        AdbControl.setAlways(context, on)
+        adb = AdbControl.isEnabled(context)
+        msg = if (on) "ADB həmişə aktiv ✓" else "Avtomatik aktiv söndürüldü"
+    }
+    msg?.let { Text(it, fontSize = 15.sp, color = CarColors.Accent) }
+
+    Label(
+        "Şəbəkə üzərindən (root tələb edir)",
+        if (ips.isEmpty()) "Wi-Fi ünvanı tapılmadı — maşın şəbəkəyə qoşulmalıdır"
+        else "Kompüter maşının Wi-Fi şəbəkəsində olsun, sonra:"
+    )
+    ips.forEach { Text("adb connect $it:${AdbControl.PORT}", fontSize = 14.sp, color = CarColors.Warning) }
+
+    Label("Kompüterdən (əl ilə)", "Düymə icazə ala bilməsə, kompüterdən bir dəfə bunları işə sal:")
+    Text("adb shell settings put global adb_enabled 1", fontSize = 14.sp, color = CarColors.Warning)
+    Text("adb tcpip ${AdbControl.PORT}", fontSize = 14.sp, color = CarColors.Warning)
+    if (!AdbControl.hasSecureWrite(context)) {
+        Text(
+            "Qeyd: WRITE_SECURE_SETTINGS icazəsi yoxdur — düymə sistemi məcbur edə bilmir, Developer seçimlərini açır.",
+            fontSize = 13.sp, color = CarColors.TextSecondary
+        )
+    }
+}
+
+/**
+ * Yeniləmə: serverdəki (GitHub Releases) ən son buraxılışı yoxlayır,
+ * varsa APK-nı endirib quraşdırıcını açır.
+ */
+@Composable
+private fun UpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<az.q07.launcher.data.OtaUpdateInfo?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    Label(
+        "Q07 Launcher ${BuildConfig.VERSION_NAME}",
+        "Versiya kodu ${BuildConfig.VERSION_CODE} · server: github.com/vuqarnamazov/Q07Launcher/releases"
+    )
+
+    OutlinedButton(enabled = !checking, onClick = {
+        checking = true
+        info = null
+        message = null
+        scope.launch {
+            val found = az.q07.launcher.data.GitHubLicenseAndOtaManager
+                .checkForOtaUpdate(BuildConfig.VERSION_CODE)
+            checking = false
+            info = found
+            if (found == null) message = "Ən son versiyadır ✓"
+        }
+    }) { Text(if (checking) "Yoxlanılır…" else "Yeniləməni yoxla") }
+
+    info?.let { u ->
+        Label("Yeni versiya var: ${u.latestVersionName}", "Bu yeniliklər gəlir:")
+        val items = u.changelogItems.ifEmpty { u.changelog.split(" · ").filter { it.isNotBlank() } }
+        items.forEach { Text("• $it", fontSize = 15.sp, color = CarColors.TextPrimary) }
+        OutlinedButton(onClick = {
+            az.q07.launcher.data.GitHubLicenseAndOtaManager
+                .downloadAndInstallApk(context, u.apkUrl)
+        }) { Text("Endir və quraşdır") }
+    }
+
+    message?.let { Text(it, fontSize = 16.sp, color = CarColors.Green) }
+    Label(
+        "Necə işləyir",
+        "Yeni APK GitHub-da «Releases» bölməsinə tag «build-<nömrə>» ilə yüklənir. " +
+            "Bütün maşınlar açılışda avtomatik yoxlayır; bu düymə ilə də əl ilə yoxlamaq olar."
+    )
+}
 
 @Composable
 private fun AboutSection() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var checking by remember { mutableStateOf(false) }
-    var info by remember { mutableStateOf<UpdateInfo?>(null) }
 
-    Label("Q07 Launcher ${BuildConfig.VERSION_NAME}", "Build #${BuildConfig.CI_BUILD} · Changan Qiyuan Q07 · 2560×1600")
+    Label("Q07 Launcher ${BuildConfig.VERSION_NAME}", "Versiya kodu ${BuildConfig.VERSION_CODE} · Changan Qiyuan Q07 · 2560×1600")
     Label(
         "Öz-özünə diaqnostika",
         if (az.q07.launcher.data.SelfDiag.safeMode) "Təhlükəsiz rejim AKTİV (ard-arda çökmə) — kokpit söndürülüb"
@@ -533,40 +651,6 @@ private fun AboutSection() {
             Text("Normal rejimə qayıt")
         }
     }
-    OutlinedButton(enabled = !checking, onClick = {
-        checking = true
-        scope.launch {
-            info = withContext(Dispatchers.IO) {
-                try {
-                    val c = URL("https://api.github.com/repos/vuqarnamazov/q07launcher/releases/latest")
-                        .openConnection() as HttpURLConnection
-                    c.connectTimeout = 8000; c.readTimeout = 8000
-                    val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-                    val n = o.getString("tag_name").substringAfter("build-").toIntOrNull() ?: 0
-                    val assets = o.getJSONArray("assets")
-                    val url = if (assets.length() > 0) assets.getJSONObject(0).getString("browser_download_url") else null
-                    UpdateInfo(n, url, null)
-                } catch (e: Exception) {
-                    UpdateInfo(0, null, "Yoxlamaq alınmadı: internet yoxdur")
-                }
-            }
-            checking = false
-        }
-    }) { Text(if (checking) "Yoxlanılır…" else "Yeniləməni yoxla") }
-
-    info?.let { u ->
-        when {
-            u.error != null -> Text(u.error, fontSize = 15.sp, color = CarColors.Danger)
-            u.latest > BuildConfig.CI_BUILD && u.url != null -> {
-                Text("Yeni versiya var: build #${u.latest}", fontSize = 16.sp, color = CarColors.Green)
-                OutlinedButton(onClick = {
-                    QuickActions.start(context, Intent(Intent.ACTION_VIEW, Uri.parse(u.url)))
-                }) { Text("Yüklə (brauzerdə açılır)") }
-            }
-            else -> Text("Ən son versiyadır ✓", fontSize = 16.sp, color = CarColors.Green)
-        }
-    }
-
     val dm = context.resources.displayMetrics
     Label("Ekran", "${dm.widthPixels}×${dm.heightPixels} px · ${dm.densityDpi} dpi")
     Label("Mənbə kodu", "github.com/vuqarnamazov/Q07Launcher")

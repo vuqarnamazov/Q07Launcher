@@ -149,14 +149,41 @@ object FactoryBridge {
 }
 
 class DriveModeService : AccessibilityService() {
+    companion object {
+        /** Q07 launcher ən son nə vaxt ön planda göründü (divar saatı) — qapı açılıb-bağlananda geri qaytarmaq üçün */
+        @Volatile private var lastQ07At = 0L
+        private const val PRESENCE_PREFS = "q07_home"
+        private const val KEY_LAST_Q07 = "last_q07"
+
+        /** MainActivity hər açılanda çağırır — launcher göründüyünü qeyd edir */
+        fun markShown(context: Context) {
+            val now = System.currentTimeMillis()
+            lastQ07At = now
+            runCatching {
+                context.getSharedPreferences(PRESENCE_PREFS, Context.MODE_PRIVATE)
+                    .edit().putLong(KEY_LAST_Q07, now).apply()
+            }
+        }
+
+        private fun lastShown(context: Context): Long = maxOf(
+            lastQ07At,
+            context.getSharedPreferences(PRESENCE_PREFS, Context.MODE_PRIVATE).getLong(KEY_LAST_Q07, 0L)
+        )
+    }
     private val main = Handler(Looper.getMainLooper())
     private var actedAt = 0L
     private var cover: ImageView? = null
     private var navAt = 0L
     private var navTries = 0
     private var lastFg: String? = null
+    /** «Həmişə aktiv» ADB rejiminin son yoxlanma vaxtı */
+    private var adbCheckedAt = 0L
 
-    override fun onServiceConnected() { FactoryBridge.service = this; VehicleTelemetryReader.start(applicationContext) }
+    override fun onServiceConnected() {
+        FactoryBridge.service = this; VehicleTelemetryReader.start(applicationContext)
+        // Xidmət təzəcə başladı: qapı/zavod ekranı ön planda qalıbsa Q07-ni geri gətir
+        main.postDelayed({ checkCurrentForeground() }, 1500)
+    }
     override fun onDestroy() { hideCover(); SidePanel.hide(this); FactoryBridge.service = null; super.onDestroy() }
     override fun onInterrupt() {}
 
@@ -194,12 +221,23 @@ class DriveModeService : AccessibilityService() {
             if (VehicleTelemetryReader.due()) runCatching { VehicleTelemetryReader.onAccessibility(windows) }
             // OBD Skan Yaddaşı: ekrandakı rəqəmlər (öyrənmə və OBD-siz oxu üçün)
             if (ObdDiscoveryBridge.due()) runCatching { ObdDiscoveryBridge.onAccessibility(windows, packageName) }
+            // «Həmişə aktiv» ADB rejimi: sönübsə dəqiqədə bir dəfə yenidən yandırılır
+            if (System.currentTimeMillis() - adbCheckedAt > 60_000) {
+                adbCheckedAt = System.currentTimeMillis()
+                runCatching { AdbControl.applyAlways(this) }
+            }
         }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val p = event.packageName?.toString()
-            if (p != null && p != lastFg) { lastFg = p; SelfDiag.log("fg", p) }
+            if (p != null && p != lastFg) {
+                val prev = lastFg
+                lastFg = p; SelfDiag.log("fg", p)
+                // Launcher göründü — qapı açılıb-bağlananda geri qaytarmaq üçün vaxtı yazırıq
+                if (p == packageName) markShown(this)
+                if (p == FactoryBridge.HOME || p in AUTO_POPUPS)
+                    factoryScreenGuard(p, event.className?.toString(), prev)
+            }
             if (FactoryBridge.job == null && p != null) SidePanel.onForeground(this, p)
-            if (p == FactoryBridge.HOME) homeGuard(event.className?.toString())
         }
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED && FactoryBridge.job == null) {
             main.removeCallbacks(windowsCheck); main.postDelayed(windowsCheck, 250)
@@ -209,44 +247,65 @@ class DriveModeService : AccessibilityService() {
         process()
     }
 
-    // ---------------- Q07 defolt ikən zavod ekranının özbaşına önə çıxmasına qarşı ----------------
-    // Qapı açılıb-bağlananda / sistem düyməsində SystemUI zavod launcher-ini birbaşa açır
-    // (START ... sdalauncher/model_main.MainActivity from com.android.systemui). Q07 defoltdursa geri qayıdırıq.
-    private var defaultCheckedAt = 0L
-    private var isDefaultCached = false
-    private val guardHits = ArrayDeque<Long>()
-
+    // ---------------- zavod ekranının özbaşına önə çıxmasına qarşı ----------------
+    // Qapı açılıb-bağlananda və ya Home basanda sistem zavod launcher-ini (sdalauncher/model_main)
+    // və ya «enerji» ekranını önə gətirir — Q07 yox olur. Q07 son 10 dəqiqədə görünübsə geri qaytarırıq.
     private val windowsCheck = Runnable { SidePanel.onWindowsChanged(this) }
+    private val AUTO_POPUPS = setOf("com.incall.apps.energy")
+    private val guardHits = ArrayDeque<Long>()
     private var lastGuardAt = 0L
 
-    private fun homeGuard(cls: String?) {
-        if (!GitHubLicenseAndOtaManager.isLocallyActivated(this)) return
-        if (cls == null || !cls.contains("model_main")) return
+    private fun restoreQ07() {
+        main.postDelayed({
+            // Əvvəlcə birbaşa MainActivity: HOME rolu Q07-də olmayanda da etibarlı işləyir
+            val shown = runCatching {
+                startActivity(Intent(this, az.q07.launcher.MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+                true
+            }.getOrDefault(false)
+            if (!shown) runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+            }
+        }, 300)
+    }
+
+    /**
+     * Zavod ekranı (sdalauncher MainActivity / enerji ekranı) özbaşına önə gələndə Q07-ni qaytarır.
+     * İstifadəçi özü açıbsa toxunmuruq; 60 saniyədə maksimum 6 dəfə — sonsuz dövrəyə qarşı.
+     */
+    private fun factoryScreenGuard(pkg: String, cls: String?, prevPkg: String?) {
+        // sdalauncher-in başqa pəncərələri bizi maraqlandırmır. className bəzən boş gəlir
+        // (activity artıq açıq olanda) — o halda qoruyucu işləməlidir.
+        if (pkg == FactoryBridge.HOME && !cls.isNullOrBlank() &&
+            !cls.contains("model_main") && !cls.contains("MainActivity")
+        ) return
         if (FactoryBridge.job != null) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastGuardAt < 1500) return
-        // freeform tətbiq açılanda Changan sistemi zavod launcher-ini arxa fona özü gətirir — o zaman toxunmuruq
+        // İstifadəçi özü tətbiq/zavod ekranı açanda sistem onu qanuni önə gətirir — toxunmuruq
         if (now - WindowLauncher.lastLaunchAt < 5_000 || SidePanel.freeformOnTop(this)) return
         if (now - QuickActions.factoryOpenedAt < 20_000) return
-        if (now - defaultCheckedAt > 5_000) {
-            isDefaultCached = runCatching { HomeMode.isDefault(this) }.getOrDefault(false); defaultCheckedAt = now
-        }
-        if (!isDefaultCached) return
-        while (guardHits.isNotEmpty() && now - guardHits.first() > 30_000) guardHits.removeFirst()
-        if (guardHits.size >= 4) return // dövrəyə düşməsin
+        // Q07 defolt əsas ekran olmasa da: son 10 dəqiqədə görünübsə geri qaytarırıq
+        val isDefault = runCatching { HomeMode.isDefault(this) }.getOrDefault(false)
+        if (!isDefault && System.currentTimeMillis() - lastShown(this) >= 10 * 60_000L) return
+        while (guardHits.isNotEmpty() && now - guardHits.first() > 60_000) guardHits.removeFirst()
+        if (guardHits.size >= 6) return
         guardHits.addLast(now); lastGuardAt = now
-        SelfDiag.log("homeguard", "zavod ekranı özbaşına açıldı → Q07-yə qayıdış")
-        main.postDelayed({
-            runCatching {
-                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(packageName)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
-            }.onFailure {
-                runCatching {
-                    startActivity(Intent(this, az.q07.launcher.MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-                }
-            }
-        }, 250)
+        SelfDiag.log(
+            "homeguard", "zavod ekranı ($pkg) özbaşına önə gəldi → Q07-yə qayıdış",
+            mapOf("prev" to prevPkg, "default" to isDefault)
+        )
+        restoreQ07()
+    }
+
+    /** Xidmət yenidən qoşulanda cari ekranı yoxlayır — zavod ekranı qalıbsa Q07 qaytarılır */
+    private fun checkCurrentForeground() {
+        val root = rootInActiveWindow ?: return
+        val pkg = root.packageName?.toString() ?: return
+        if (pkg == packageName) { markShown(this); return }
+        if (pkg == FactoryBridge.HOME || pkg in AUTO_POPUPS)
+            factoryScreenGuard(pkg, root.className?.toString(), null)
     }
 
     private val poller = object : Runnable {
