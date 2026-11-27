@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import kotlinx.coroutines.launch
@@ -91,7 +92,14 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                                 page == 0 && cockpit -> {
                                     CockpitCenter(onOpenModules = { pagerScope.launch { pager.animateScrollToPage(1) } },
                                         modifier = Modifier.weight(0.58f).fillMaxHeight())
-                                    AppsPanel(apps, columns = 3, Modifier.weight(0.42f).fillMaxHeight())
+                                    // sağ sütun: Smart ADAS Radar + tətbiqlər şəbəkəsi
+                                    Column(
+                                        Modifier.weight(0.42f).fillMaxHeight(),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        SmartAdasRadarCard(Modifier.fillMaxWidth().height(140.dp))
+                                        AppsPanel(apps, columns = 3, Modifier.fillMaxWidth().weight(1f))
+                                    }
                                 }
                                 page == 0 -> {
                                     // təhlükəsiz rejim: kokpit yoxdur — modullar + tətbiqlər
