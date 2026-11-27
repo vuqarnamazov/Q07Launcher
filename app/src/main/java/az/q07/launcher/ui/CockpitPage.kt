@@ -94,85 +94,6 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.abs
 
-/**
- * Səhifə 0 — tünd kokpit:
- *  sol zolaq (saat + qısayollar) | mərkəz (fırlanan avtomobil + idarəetmə chip-ləri) | sağ (tətbiqlər)
- */
-@Composable
-fun CockpitPage(apps: List<AppEntry>?, onOpenModules: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        CockpitSideStrip(Modifier.weight(0.19f).fillMaxHeight())
-        CockpitCenter(onOpenModules, Modifier.weight(0.47f).fillMaxHeight())
-        AppsPanel(apps, columns = 3, modifier = Modifier.weight(0.34f).fillMaxHeight())
-    }
-}
-
-// ---------------------------------------------------------------- sol zolaq
-@Composable
-private fun CockpitSideStrip(modifier: Modifier) {
-    val context = LocalContext.current
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); kotlinx.coroutines.delay(1000) } }
-    PanelSurface(modifier) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(SimpleDateFormat(if (AppSettings.showSeconds) "HH:mm:ss" else "HH:mm", Locale.getDefault()).format(now),
-                fontSize = 46.sp, fontWeight = FontWeight.Light, color = CarColors.TextPrimary, maxLines = 1)
-            Text(SimpleDateFormat("EEEE, d MMMM", Locale("az")).format(now), fontSize = 14.sp, color = CarColors.TextSecondary)
-            Spacer(Modifier.height(8.dp))
-            Shortcut("Naviqasiya (Waze)", Icons.Filled.Navigation, Color(0xFF33CCFF)) { QuickActions.openNavigation(context) }
-            Shortcut("YouTube", Icons.Filled.PlayCircle, Color(0xFFFF4D4D)) { QuickActions.openYouTube(context) }
-            Shortcut("Gemini Səsli", Icons.Filled.Mic, Color(0xFFB36BFF)) { QuickActions.openGemini(context) }
-            Shortcut("Sürətli Makrolar", Icons.Filled.PlayCircle, Color(0xFF33CCFF)) {
-                context.startActivity(
-                    android.content.Intent(context, MacroActivity::class.java)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }
-            Shortcut("Zavod Menyusu", Icons.Filled.Home, CarColors.Warning) {
-                val homes = QuickActions.findOtherHomes(context)
-                if (homes.isNotEmpty()) QuickActions.launchHome(context, homes.first()) else QuickActions.openHomeSettings(context)
-            }
-            Spacer(Modifier.height(6.dp))
-            LiveMini()
-        }
-    }
-}
-
-@Composable
-private fun Shortcut(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(26.dp))
-        Text(title, fontSize = 16.sp, color = CarColors.TextPrimary, maxLines = 1, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun LiveMini() {
-    val obd by ObdMonitor.state.collectAsState()
-    val v = obd.values
-    fun f(k: String, d: Int = 0) = v[k]?.let { if (d == 0) it.toInt().toString() else String.format(Locale.US, "%.${d}f", it) } ?: "—"
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CarColors.PanelAlt).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text("${f("speed")} km/s", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = CarColors.TextPrimary)
-        Text("SOC ${f("soc", 1)}%  ·  12V ${f("voltage", 1)}", fontSize = 13.sp, color = CarColors.TextSecondary)
-        Text("Soyuducu ${f("coolant")}°C  ·  Çöl ${f("ambient")}°C", fontSize = 13.sp, color = CarColors.TextSecondary)
-    }
-}
-
 // ---------------------------------------------------------------- mərkəz
 @Composable
 internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
@@ -188,8 +109,14 @@ internal fun CockpitCenter(onOpenModules: () -> Unit, modifier: Modifier) {
     PanelSurface(modifier) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TopPill("Q07 İdarəetmə və Modullar", Icons.Filled.ChevronRight, Modifier.weight(1.4f), trailing = true, onClick = onOpenModules)
-                TopPill("Sürətli Qeyd", Icons.Filled.EditNote, Modifier.weight(1f)) { noteOpen = true }
+                TopPill("Q07 İdarəetmə və Modullar", Icons.Filled.ChevronRight, Modifier.weight(1.3f), trailing = true, onClick = onOpenModules)
+                TopPill("Sürətli Makrolar", Icons.Filled.PlayCircle, Modifier.weight(0.9f)) {
+                    context.startActivity(
+                        android.content.Intent(context, MacroActivity::class.java)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                TopPill("Sürətli Qeyd", Icons.Filled.EditNote, Modifier.weight(0.8f)) { noteOpen = true }
             }
             // qalan yer: avtomobil + chip-lər; ekran kiçiləndə sürüşür, heç nə itmir
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
