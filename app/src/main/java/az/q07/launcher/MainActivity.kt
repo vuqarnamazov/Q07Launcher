@@ -21,6 +21,7 @@ import az.q07.launcher.data.ReminderScheduler
 import az.q07.launcher.data.WidgetStore
 import az.q07.launcher.ui.LauncherScreen
 import az.q07.launcher.ui.theme.CarLauncherTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -37,8 +38,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applyExtras(intent)
         super.onCreate(savedInstanceState)
+        // Başqa maşından götürülmüş default ayarlar — hər şeydən ƏVVƏL (prefs hələ açılmayıb)
+        runCatching { az.q07.launcher.data.SettingsSnapshot.seedIfNeeded(applicationContext) }
+        // Jurnal hər şeydən əvvəl işə düşməlidir ki, adb ilə göndərilən aktivasiya da yazılsın
+        az.q07.launcher.data.SelfDiag.init(applicationContext)
+        applyExtras(intent)
         // telefon–maşın fayl kanalı: launcher açılanda işə düşür (PIN yaranır)
         runCatching { az.q07.launcher.data.PhoneCarTransferServer.start(applicationContext) }
 
@@ -47,13 +52,21 @@ class MainActivity : ComponentActivity() {
         LauncherPrefs.init(applicationContext)
         DualNetworkManager.init(applicationContext)
         WidgetStore.init(applicationContext)
-        az.q07.launcher.data.SelfDiag.init(applicationContext)
         az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
+        // «Həmişə aktiv» ADB rejimi: launcher hər açılanda yoxlanılır
+        runCatching { az.q07.launcher.data.AdbControl.applyAlways(applicationContext) }
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         az.q07.launcher.data.VehicleTelemetryReader.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
         // Tam Skaner: bazalar + Fon İzləməsi əvvəl açıq idisə xidməti bərpa et
         az.q07.launcher.scanner.FullVehicleScannerManager.restoreIfNeeded(applicationContext)
+        // Mühərrik START/STOP düymələrinə uyğun yolları fon axınında bağla —
+        // açılışda UI bloklanmasın, ilk basış dərhal işləsin.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching { az.q07.launcher.data.EngineFlowBinding.autoAssign(applicationContext, true) }
+            // Söndürmə yolu da özü tapılsın (skaner qeydi / ekran xəritəsindəki «Söndür»)
+            runCatching { az.q07.launcher.data.EngineFlowBinding.autoAssign(applicationContext, false) }
+        }
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -73,24 +86,23 @@ class MainActivity : ComponentActivity() {
             this, packageReceiver, filter, ContextCompat.RECEIVER_EXPORTED
         )
 
-        // Sorğu kodu jurnala — sahib maşını licenses.json-a əlavə etmək üçün adb ilə oxuya bilsin
-        runCatching {
-            az.q07.launcher.data.SelfDiag.log("license", "sorğu kodu",
-                mapOf("kod" to az.q07.launcher.data.GitHubLicenseAndOtaManager.getVehicleRequestCode(applicationContext)))
-        }
+        // Cihaz kodu jurnala — sahib adb ilə oxuyub aktivasiya kodu yarada bilsin
+        az.q07.launcher.data.LicenseManager.logDeviceCode(applicationContext)
+
+        // Lisenziya: aktivasiya olmadan launcher açılmır, yalnız kilid ekranı görünür.
         setContent {
             CarLauncherTheme {
-                val lic = az.q07.launcher.data.GitHubLicenseAndOtaManager
                 var activated by androidx.compose.runtime.remember {
-                    androidx.compose.runtime.mutableStateOf(lic.isLocallyActivated(applicationContext))
+                    androidx.compose.runtime.mutableStateOf(
+                        az.q07.launcher.data.LicenseManager.isActivated(applicationContext)
+                    )
                 }
                 var ota by androidx.compose.runtime.remember {
                     androidx.compose.runtime.mutableStateOf<az.q07.launcher.data.OtaUpdateInfo?>(null)
                 }
-                // Aktiv launcher bir daha yoxlanılmır/bloklanmır (kod yalnız ilk aktivləşdirmədə lazımdır).
-                // Yalnız OTA yeniləmə yoxlanılır.
                 androidx.compose.runtime.LaunchedEffect(activated) {
-                    if (activated) ota = lic.checkForOtaUpdate(az.q07.launcher.BuildConfig.VERSION_CODE)
+                    if (activated) ota = az.q07.launcher.data.GitHubLicenseAndOtaManager
+                        .checkForOtaUpdate(az.q07.launcher.BuildConfig.VERSION_CODE)
                 }
                 if (activated) {
                     LauncherScreen(appsVersion = appsVersion, resumeTick = resumeTick)
@@ -110,6 +122,14 @@ class MainActivity : ComponentActivity() {
     /** adb ilə: am start -n az.q07.launcher/.MainActivity --es q07_plate "90-AA-000" (nömrə repoda saxlanmır) */
     private fun applyExtras(i: android.content.Intent?) {
         i?.getStringExtra("q07_plate")?.let { az.q07.launcher.data.CarLook.setPlate(applicationContext, it) }
+        // adb ilə launcher ayarlarını ixrac etmək üçün
+        if (i?.hasExtra("q07_export_settings") == true) {
+            az.q07.launcher.data.SettingsSnapshot.exportAndToast(applicationContext)
+        }
+        // adb ilə aktivasiya: am start -n az.q07.launcher/.MainActivity --es q07_license "<kod>"
+        i?.getStringExtra("q07_license")?.let {
+            runCatching { az.q07.launcher.data.LicenseManager.activate(applicationContext, it) }
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -120,6 +140,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AppVisibility.visible = true
+        az.q07.launcher.data.DriveModeService.markShown(applicationContext)
         az.q07.launcher.data.SelfDiag.ensureAccessibility(applicationContext)
         runCatching { WidgetStore.host.startListening() }
     }

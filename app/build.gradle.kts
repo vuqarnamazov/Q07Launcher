@@ -14,8 +14,9 @@ android {
         minSdk = 30          // Android 11 (head unit)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         targetSdk = 30
-        versionCode = 60
-        versionName = "1.59"
+        // versionCode = GitHub Release tag nömrəsi («build-84»). Hər yeni buraxılışda +1.
+        versionCode = 96
+        versionName = "1.82"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
         // Lisenziya artıq asimmetrik açıq açarla işləyir — yığılma üçün gizli açar lazım deyil.

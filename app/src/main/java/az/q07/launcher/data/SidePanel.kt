@@ -93,7 +93,6 @@ object SidePanel {
     private fun dp(c: Context, v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.resources.displayMetrics).toInt()
 
     fun show(service: DriveModeService) {
-        if (!GitHubLicenseAndOtaManager.isLocallyActivated(service)) return
         if (view != null) return
         val dm = service.resources.displayMetrics
         val width = if (WindowLauncher.dockRightPx > 0) WindowLauncher.dockRightPx else (dm.widthPixels * 0.24f).toInt()
