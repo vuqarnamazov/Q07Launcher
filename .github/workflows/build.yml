@@ -58,13 +58,23 @@ jobs:
             app/build/outputs/apk/release/*.apk
             scanner/build/outputs/apk/release/*.apk
 
+      # OTA serveri tag-ı «build-<versionCode>» kimi oxuyur: tag mütləq APK-nın
+      # versionCode-u ilə üst-üstə düşməlidir, run_number ilə yox.
+      - name: Version code (OTA tag)
+        id: ver
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          CODE=$(grep -m1 -oE 'versionCode[[:space:]]*=[[:space:]]*[0-9]+' app/build.gradle.kts | grep -oE '[0-9]+')
+          echo "OTA tag: build-$CODE"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
       # Hər uğurlu build GitHub Release kimi də dərc olunur (birbaşa yükləmə linki)
       - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Q07 Launcher build ${{ github.run_number }}
+          tag_name: build-${{ steps.ver.outputs.code }}
+          name: Q07 Launcher build ${{ steps.ver.outputs.code }}
           body: "Commit ${{ github.sha }}"
           files: |
             app/build/outputs/apk/release/app-release.apk
