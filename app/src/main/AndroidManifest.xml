@@ -120,6 +120,15 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Sürətli Makrolar: 3-4 addımlı menyu gedişini yazıb bir düymə ilə icra et -->
+        <activity
+            android:name=".ui.MacroActivity"
+            android:exported="false"
+            android:label="Sürətli Makrolar"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            tools:ignore="LockedOrientationActivity" />
+
         <receiver
             android:name=".data.ReminderReceiver"
             android:exported="false" />

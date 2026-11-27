@@ -125,6 +125,12 @@ private fun CockpitSideStrip(modifier: Modifier) {
             Shortcut("Naviqasiya (Waze)", Icons.Filled.Navigation, Color(0xFF33CCFF)) { QuickActions.openNavigation(context) }
             Shortcut("YouTube", Icons.Filled.PlayCircle, Color(0xFFFF4D4D)) { QuickActions.openYouTube(context) }
             Shortcut("Gemini Səsli", Icons.Filled.Mic, Color(0xFFB36BFF)) { QuickActions.openGemini(context) }
+            Shortcut("Sürətli Makrolar", Icons.Filled.PlayCircle, Color(0xFF33CCFF)) {
+                context.startActivity(
+                    android.content.Intent(context, MacroActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
             Shortcut("Zavod Menyusu", Icons.Filled.Home, CarColors.Warning) {
                 val homes = QuickActions.findOtherHomes(context)
                 if (homes.isNotEmpty()) QuickActions.launchHome(context, homes.first()) else QuickActions.openHomeSettings(context)

@@ -215,6 +215,8 @@ class DriveModeService : AccessibilityService() {
 
     // ---------------- hadisələr ----------------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Sürətli Makrolar: yazı rejimində klikləri addım kimi toplayır
+        if (event != null) runCatching { az.q07.launcher.macro.MacroAccessibilityHook.onEvent(this, event) }
         if (event?.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) return
         // Daxili göstəricilər: status zolağı və zavod ekranlarındakı km/h, %, km, °C mətnləri
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -321,6 +323,10 @@ class DriveModeService : AccessibilityService() {
         main.removeCallbacks(poller)
         main.postDelayed(poller, 400)
     }
+
+    /** Sürətli Makrolar üçün: pəncərələrin kök düyünləri və toxunuş */
+    fun macroRoots(): List<AccessibilityNodeInfo> = roots()
+    fun macroTap(x: Float, y: Float) = tap(x, y)
 
     private fun roots(): List<AccessibilityNodeInfo> = buildList {
         windows?.forEach { w -> w.root?.let { add(it) } }

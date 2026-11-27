@@ -15,8 +15,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         targetSdk = 30
         // versionCode = GitHub Release tag nömrəsi («build-84»). Hər yeni buraxılışda +1.
-        versionCode = 98
-        versionName = "1.84"
+        versionCode = 99
+        versionName = "1.85"
         // GitHub Actions build nömrəsi — tətbiq daxilində yeniləməni yoxlamaq üçün
         buildConfigField("int", "CI_BUILD", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
         // Lisenziya artıq asimmetrik açıq açarla işləyir — yığılma üçün gizli açar lazım deyil.
