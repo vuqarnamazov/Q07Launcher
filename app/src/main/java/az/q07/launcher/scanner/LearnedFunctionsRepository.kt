@@ -43,7 +43,7 @@ data class LearnedFunction(
     }
 }
 
-/** Fayl: filesDir/learned_functions.json */
+/** Fayl: filesDir/learned_functions.json (AES-256-GCM ilə şifrələnmiş) */
 object LearnedFunctionsRepository {
     private const val FILE = "learned_functions.json"
 
@@ -60,7 +60,10 @@ object LearnedFunctionsRepository {
         file = f
         _items.value = runCatching {
             if (!f.exists()) emptyList() else {
-                val a = JSONArray(f.readText())
+                val raw = f.readText()
+                // AES-256 şifrələnmiş fayl; köhnə açıq JSON da oxunur (ilk yazılışda şifrələnir)
+                val json = if (FlowCrypto.isEncrypted(raw)) FlowCrypto.decrypt(raw) ?: "[]" else raw
+                val a = JSONArray(json)
                 (0 until a.length()).mapNotNull { runCatching { LearnedFunction.fromJson(a.getJSONObject(it)) }.getOrNull() }
             }
         }.getOrDefault(emptyList())
@@ -119,7 +122,10 @@ object LearnedFunctionsRepository {
         io.execute {
             runCatching {
                 val tmp = File(f.parentFile, "$FILE.tmp")
-                tmp.writeText(JSONArray().apply { snapshot.forEach { put(it.toJson()) } }.toString())
+                val json = JSONArray().apply { snapshot.forEach { put(it.toJson()) } }.toString()
+                // AES-256-GCM: açar Android Keystore-da, faylda yalnız şifrəli mətn
+                val payload = FlowCrypto.encrypt(json) ?: json
+                tmp.writeText(payload)
                 tmp.renameTo(f)
             }
         }
