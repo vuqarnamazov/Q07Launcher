@@ -58,17 +58,8 @@ class MainActivity : ComponentActivity() {
         az.q07.launcher.data.ObdMonitor.ensureRunning()
         az.q07.launcher.data.VehicleTelemetryReader.start(applicationContext)
         ReminderScheduler.createChannel(applicationContext)
-        // tt sxemi dəyişdi: köhnə (səhv yazılmış) yolları və bağlamaları bir dəfə sil
-        runCatching { az.q07.launcher.scanner.TtLearning.freshStartIfNeeded(applicationContext) }
-        // Tam Skaner: bazalar + Fon İzləməsi əvvəl açıq idisə xidməti bərpa et
-        az.q07.launcher.scanner.FullVehicleScannerManager.restoreIfNeeded(applicationContext)
-        // Mühərrik START/STOP düymələrinə uyğun yolları fon axınında bağla —
-        // açılışda UI bloklanmasın, ilk basış dərhal işləsin.
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            runCatching { az.q07.launcher.data.EngineFlowBinding.autoAssign(applicationContext, true) }
-            // Söndürmə yolu da özü tapılsın (skaner qeydi / ekran xəritəsindəki «Söndür»)
-            runCatching { az.q07.launcher.data.EngineFlowBinding.autoAssign(applicationContext, false) }
-        }
+        // Köhnə tt/skan məlumatları (yollar, ekran xəritəsi, bağlamalar) birdəfəlik silinir
+        runCatching { az.q07.launcher.data.LegacyCleanup.runIfNeeded(applicationContext) }
 
         // Geri düyməsi launcher-dən çıxmasın (onBackPressed-in müasir əvəzi)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

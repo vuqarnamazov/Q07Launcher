@@ -129,9 +129,6 @@ private fun CockpitSideStrip(modifier: Modifier) {
                 val homes = QuickActions.findOtherHomes(context)
                 if (homes.isNotEmpty()) QuickActions.launchHome(context, homes.first()) else QuickActions.openHomeSettings(context)
             }
-            // Tam Skaner: Fon İzləməsi düyməsi + skaner ekranına keçid; bərkidilmiş funksiyalar 1 toxunuşla
-            ScannerBackgroundToggle()
-            PinnedQuickActions()
             Spacer(Modifier.height(6.dp))
             LiveMini()
         }

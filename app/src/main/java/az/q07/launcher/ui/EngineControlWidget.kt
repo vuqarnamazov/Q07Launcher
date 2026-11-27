@@ -26,17 +26,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import az.q07.launcher.data.EngineFlowBinding
 import az.q07.launcher.data.VehicleEngineController
-import az.q07.launcher.scanner.LearnedFunctionsRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Mühərrik / READY idarəsi — TƏK düymə.
  *
  * Başqa düymə, siyahı və ya seçim yoxdur: basırsan → işə düşür, bir daha basırsan → sönür.
- * Yol (skanerdən öyrənilmiş gedişat) yoxdursa [VehicleEngineController] onu özü tapır.
+ * Yol [VehicleEngineController] içində saxlanılan əl ilə yazılmış yoldur.
  * Yalnız P vəziyyətində.
  */
 @Composable
@@ -46,16 +42,7 @@ fun EngineControlWidget(modifier: Modifier = Modifier) {
     val isRunning by VehicleEngineController.isEngineRunning.collectAsState()
     val busy by VehicleEngineController.busy.collectAsState()
 
-    // Skanerdə Pay Charging / doldurma rejimində başladılan yol varsa — özü bağlanır.
-    // Disk/hesabat işi fon axınında aparılır ki, ilk basışlar UI-nı gözləməkdən itməsin.
-    LaunchedEffect(Unit) {
-        VehicleEngineController.init(context)
-        withContext(Dispatchers.IO) {
-            LearnedFunctionsRepository.init(context)
-            EngineFlowBinding.autoAssign(context, true)
-            EngineFlowBinding.autoAssign(context, false)
-        }
-    }
+    LaunchedEffect(Unit) { VehicleEngineController.init(context) }
 
     val ringColor by animateColorAsState(
         targetValue = if (isRunning) Color(0xFF10B981) else Color(0xFF0284C7),

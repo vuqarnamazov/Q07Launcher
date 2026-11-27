@@ -67,7 +67,7 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
             // kompakt rejim ləğv edilib
             if (landscape) {
                 // Sol panel (saat + proqramlar) SABİT qalır; sağ hissə telefon kimi səhifələrlə sürüşür
-                val pageCount = 4
+                val pageCount = 3
                 val pager = rememberPagerState(pageCount = { pageCount })
                 val pagerScope = rememberCoroutineScope()
                 val cockpit = !az.q07.launcher.data.SelfDiag.safeMode
@@ -109,10 +109,6 @@ fun LauncherScreen(appsVersion: Int, resumeTick: Int = 0) {
                                 page == 1 -> {
                                     // tətbiqlər yalnız 1-ci səhifədə; burada modullar bütün eni tutur
                                     ModulesPanel(Modifier.fillMaxSize())
-                                }
-                                page == 2 -> {
-                                    // 3 sütunlu kompakt idarəetmə: scroll yoxdur, «tt» bir toxunuş
-                                    VehicleControlPage(Modifier.fillMaxSize())
                                 }
                                 else -> {
                                     // son səhifə: son açılan proqramlar (çoxlu mini pəncərə paneli ləğv edilib)

@@ -120,23 +120,6 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Tam Skaner: Fon İzləməsi ön plan xidməti -->
-        <service
-            android:name=".scanner.VehicleScannerService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Tam Skaner ekranı (Açıq rejim) -->
-        <activity
-            android:name=".ui.VehicleScannerActivity"
-            android:exported="false"
-            android:label="Tam Skaner"
-            android:taskAffinity="az.q07.launcher.scanner"
-            android:screenOrientation="landscape"
-            android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
-            tools:ignore="LockedOrientationActivity" />
-
         <receiver
             android:name=".data.ReminderReceiver"
             android:exported="false" />

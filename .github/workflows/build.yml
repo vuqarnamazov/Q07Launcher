@@ -54,9 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Q07Launcher
-          path: |
-            app/build/outputs/apk/release/*.apk
-            scanner/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/*.apk
 
       # OTA serveri tag-ı «build-<versionCode>» kimi oxuyur: tag mütləq APK-nın
       # versionCode-u ilə üst-üstə düşməlidir, run_number ilə yox.
@@ -76,7 +74,5 @@ jobs:
           tag_name: build-${{ steps.ver.outputs.code }}
           name: Q07 Launcher build ${{ steps.ver.outputs.code }}
           body: "Commit ${{ github.sha }}"
-          files: |
-            app/build/outputs/apk/release/app-release.apk
-            scanner/build/outputs/apk/release/scanner-release.apk
+          files: app/build/outputs/apk/release/app-release.apk
           make_latest: true

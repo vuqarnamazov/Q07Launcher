@@ -39,8 +39,6 @@ object ModuleRegistry {
         VoiceNoteModule,
         NetworkModule,
         SystemInfoModule,
-        VehicleScannerModule,
-        PathsModule,
         ServiceModule,
         TransferModule,
         EngineModule,

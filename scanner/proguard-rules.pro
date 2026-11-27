@@ -1,1 +1,0 @@
--keep class az.q07.scanner.data.DriveModeService { *; }

@@ -29,7 +29,7 @@ object SettingsSnapshot {
     private val ALLOW_FILES = setOf(
         "q07_settings", "q07_launcher", "q07_widgets", "q07_carlook", "q07_home",
         "q07_drivemode", "q07_dualnet", "q07_multi_app_frame_prefs",
-        "q07_engine_control_prefs", "q07_adas_radar", "full_scanner", "q07_adb"
+        "q07_engine_control_prefs", "q07_adas_radar", "q07_adb"
     )
 
     fun prefsDir(context: Context): File =
